@@ -18,6 +18,9 @@ Each scenario is broken into step-by-step multiple-choice questions with optiona
 - Per-category performance breakdown
 - Persistent leaderboard stored in JSON
 - Hint tracking
+- End-of-round continue option that keeps your score and stats
+- Early quit and save support
+- Resume saved game on next launch
 
 ## Requirements
 
@@ -31,6 +34,12 @@ From the project root directory:
 python3 Whiteboarding_Interview
 ```
 
+## Controls
+
+- A / B / C / D: choose an answer
+- H: show a hint for the current step
+- Q: quit early, save progress, and exit
+
 ## How the Game Works
 
 1. Enter your name.
@@ -39,7 +48,18 @@ python3 Whiteboarding_Interview
 4. For each step:
    - Answer with A, B, C, or D
    - Type H to view a hint
+   - Type Q to quit early and save your progress
 5. Review your final score, category breakdown, and leaderboard placement.
+6. At the end, the game says "Thank you for playing" and asks if you want to continue.
+   - If yes, you play another round with your current score/stats preserved.
+   - If no, the game says "Goodbye" and exits.
+
+## Save and Resume
+
+- If you quit with Q during a step, the game saves your place.
+- On next launch, if a save exists, you can resume from where you left off.
+- If you choose not to resume, the old save is cleared and a new game starts.
+- Save data includes your score state, category stats, selected scenarios, and step position.
 
 ## Scoring Rules
 
@@ -65,6 +85,7 @@ Stored fields include:
 
 - Whiteboarding_Interview: main game script
 - whiteboard_leaderboard.json: auto-generated leaderboard data file
+- whiteboard_save.json: auto-generated in-progress save file used for resume
 
 ## Notes
 

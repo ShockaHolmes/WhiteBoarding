@@ -1,13 +1,35 @@
 import json
 import os
 import random
+import re
+import shutil
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 LEADERBOARD_FILE = "whiteboard_leaderboard.json"
+SAVE_FILE = "whiteboard_save.json"
 SESSION_SCENARIOS = 10
 STARTING_HEARTS = 12
+BOLD = "\033[1m"
+DIM = "\033[2m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+BLUE = "\033[94m"
+MAGENTA = "\033[95m"
+CYAN = "\033[96m"
+RESET = "\033[0m"
+LANGUAGE_CHOICES = {
+    "1": "python",
+    "2": "java",
+    "3": "csharp",
+}
+LANGUAGE_DISPLAY = {
+    "python": "Python",
+    "java": "Java",
+    "csharp": "C#",
+}
 
 
 @dataclass
@@ -52,6 +74,49 @@ def hearts_text(hearts: int) -> str:
     return full + empty
 
 
+def color_text(text: str, *styles: str) -> str:
+    return "".join(styles) + text + RESET
+
+
+def terminal_width() -> int:
+    return max(72, min(shutil.get_terminal_size((72, 20)).columns, 100))
+
+
+def print_rule(char: str = "═", style: str = CYAN) -> None:
+    print(color_text(char * terminal_width(), style))
+
+
+def print_banner(title: str, subtitle: Optional[str] = None) -> None:
+    width = terminal_width()
+    print()
+    print(color_text("╔" + "═" * (width - 2) + "╗", CYAN))
+    print(color_text(f"║{title.center(width - 2)}║", CYAN, BOLD))
+    if subtitle:
+        print(color_text(f"║{subtitle.center(width - 2)}║", BLUE))
+    print(color_text("╚" + "═" * (width - 2) + "╝", CYAN))
+
+
+def print_panel(title: str, lines: List[str], accent: str = BLUE) -> None:
+    width = terminal_width()
+    print(color_text(f"\n{title}", accent, BOLD))
+    print(color_text("─" * width, accent))
+    for line in lines:
+        print(line)
+
+
+def format_score(score: int, possible: int) -> str:
+    return color_text(f"{score}/{possible}", BOLD, CYAN)
+
+
+def level_badge(level: str) -> str:
+    palette = {
+        "easy": GREEN,
+        "medium": YELLOW,
+        "hard": RED,
+    }
+    return color_text(level.title(), BOLD, palette.get(level, CYAN))
+
+
 def load_leaderboard() -> List[Dict]:
     if not os.path.exists(LEADERBOARD_FILE):
         return []
@@ -66,6 +131,49 @@ def load_leaderboard() -> List[Dict]:
 def save_leaderboard(entries: List[Dict]) -> None:
     with open(LEADERBOARD_FILE, "w", encoding="utf-8") as f:
         json.dump(entries[:10], f, indent=2)
+
+
+def load_saved_game() -> Optional[Dict]:
+    if not os.path.exists(SAVE_FILE):
+        return None
+    try:
+        with open(SAVE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else None
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def save_game_progress(
+    name: str,
+    level: str,
+    language: str,
+    state: Dict,
+    category_stats: Dict[str, Dict[str, int]],
+    selected_indices: List[int],
+    scenario_position: int,
+    step_position: int,
+) -> None:
+    payload = {
+        "name": name,
+        "level": level,
+        "language": language,
+        "state": state,
+        "category_stats": category_stats,
+        "selected_indices": selected_indices,
+        "scenario_position": scenario_position,
+        "step_position": step_position,
+    }
+    with open(SAVE_FILE, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+
+def clear_saved_game() -> None:
+    if os.path.exists(SAVE_FILE):
+        try:
+            os.remove(SAVE_FILE)
+        except OSError:
+            pass
 
 
 def update_leaderboard(name: str, score: int, possible: int, level: str, hints_used: int) -> List[Dict]:
@@ -85,18 +193,18 @@ def update_leaderboard(name: str, score: int, possible: int, level: str, hints_u
 
 
 def print_leaderboard(entries: List[Dict]) -> None:
-    print("\n" + "=" * 72)
-    print("LEADERBOARD")
-    print("=" * 72)
+    print_banner("LEADERBOARD", "Top 10 Runs")
     if not entries:
-        print("No leaderboard entries yet.")
+        print(color_text("No leaderboard entries yet.", DIM))
         return
     for i, entry in enumerate(entries, start=1):
+        medal = color_text(f"#{i}", BOLD, MAGENTA if i <= 3 else BLUE)
         print(
-            f"{i:>2}. {entry['name']:<15} "
-            f"Level: {entry['level']:<6} "
-            f"Score: {entry['score']}/{entry['possible']:<4} "
-            f"Percent: {entry['percent']:>5}% "
+            f"{medal:<14}"
+            f"{entry['name']:<15} "
+            f"Level: {level_badge(entry['level']):<15}"
+            f"Score: {entry['score']}/{entry['possible']:<6}"
+            f"Percent: {entry['percent']:>6}% "
             f"Hints: {entry['hints_used']}"
         )
 
@@ -109,24 +217,285 @@ def ask_level() -> str:
         print("Please type easy, medium, or hard.")
 
 
+def ask_language() -> str:
+    while True:
+        print_panel(
+            "Question Language",
+            [
+                f"  {color_text('1.', BOLD, CYAN)} Python",
+                f"  {color_text('2.', BOLD, CYAN)} Java",
+                f"  {color_text('3.', BOLD, CYAN)} C#",
+            ],
+            accent=MAGENTA,
+        )
+        choice = input(color_text("Enter 1, 2, or 3: ", BOLD)).strip()
+        if choice in LANGUAGE_CHOICES:
+            return LANGUAGE_CHOICES[choice]
+        print(color_text("Please enter 1, 2, or 3.", YELLOW))
+
+
 def ask_player_name() -> str:
     name = input("Enter your name for the leaderboard: ").strip()
     return name if name else "Player"
 
 
-def ask_step(step: StepQuestion) -> tuple[bool, int]:
+def _map_param_type(param: str, language: str) -> str:
+    p = param.strip()
+    if language == "java":
+        if p in {"n", "num", "target", "start", "i"}:
+            return "int"
+        if p in {"nums", "items"}:
+            return "int[]"
+        if p in {"text", "name", "ch"}:
+            return "String"
+        return "Object"
+    if language == "csharp":
+        if p in {"n", "num", "target", "start", "i"}:
+            return "int"
+        if p in {"nums", "items"}:
+            return "int[]"
+        if p in {"text", "name", "ch"}:
+            return "string"
+        return "object"
+    return ""
+
+
+def _infer_return_type(func_name: str, params: List[str], language: str) -> str:
+    lower_name = func_name.lower()
+
+    if lower_name.startswith(("is_", "has_")):
+        return "boolean" if language == "java" else "bool"
+    if lower_name.startswith(("count_", "sum_", "find_", "binary_search_", "add_")):
+        return "int"
+    if lower_name.startswith(("first_char_", "greet_", "reverse_")):
+        return "String" if language == "java" else "string"
+    if lower_name.startswith("two_sum_"):
+        return "int[]"
+    if params == ["text"]:
+        return "String" if language == "java" else "string"
+    return "Object" if language == "java" else "object"
+
+
+def _convert_def_header(match: re.Match, language: str) -> str:
+    func_name = match.group(1)
+    raw_params = match.group(2).strip()
+    params = [] if not raw_params else [p.strip() for p in raw_params.split(",") if p.strip()]
+    if language == "java":
+        typed = [f"{_map_param_type(p, language)} {p}" for p in params]
+        return_type = _infer_return_type(func_name, params, language)
+        return f"public static {return_type} {func_name}({', '.join(typed)}) {{"
+    if language == "csharp":
+        typed = [f"{_map_param_type(p, language)} {p}" for p in params]
+        return_type = _infer_return_type(func_name, params, language)
+        return f"public static {return_type} {func_name}({', '.join(typed)}) {{"
+    return match.group(0)
+
+
+def localize_text(text: str, language: str) -> str:
+    if language == "python":
+        return text
+
+    localized = text
+    if language == "java":
+        replacements = [
+            ("Write a function named", "Write a method named"),
+            ("Function + arithmetic", "Method + arithmetic"),
+            ("Function + conditionals", "Method + conditionals"),
+            ("Function + strings", "Method + strings"),
+            ("Function + lists", "Method + arrays/lists"),
+            ("Function + strings + loops", "Method + strings + loops"),
+            ("Function + lists + loops + conditionals", "Method + arrays/lists + loops + conditionals"),
+            ("Function + lists + comparison", "Method + arrays/lists + comparison"),
+            ("Function + lists + counting", "Method + arrays/lists + counting"),
+            ("Most interview coding tasks begin by defining a function.", "Most interview coding tasks begin by defining a method."),
+            ("You should start with def because you are creating a function.", "You should start with a method signature because you are creating a method."),
+            ("You are creating a function, not a class or variable.", "You are creating a method, not a class or variable."),
+            ("The task is to define a function.", "The task is to define a method."),
+            ("You are defining a function.", "You are defining a method."),
+            ("Pick the valid function definition format.", "Pick the valid method definition format."),
+            ("This is the correct Python function header.", "This is the correct Java method header."),
+            ("This is the correct function definition.", "This is the correct method definition."),
+            ("Pick the valid Python function definition.", "Pick the valid Java method definition."),
+            ("Interview functions normally return the result.", "Interview methods normally return the result."),
+            ("The function should return the computed value.", "The method should return the computed value."),
+            ("The function should return the result instead of printing it.", "The method should return the result instead of printing it."),
+            ("str", "String"),
+            ("list", "array/list"),
+            ("dict", "HashMap"),
+            ("True", "true"),
+            ("False", "false"),
+            ("self.", "this."),
+            ("int", "int"),
+            ("len(items)", "items.length"),
+            ("len(stack)", "stack.size()"),
+            ("return n + ", "return n + "),
+            ("return n % 2 == 0", "return n % 2 == 0;"),
+            ("return text[0]", "return text.charAt(0);"),
+            ("return 'Hello, ' + name", "return \"Hello, \" + name;"),
+            ("return len(items)", "return items.length;"),
+            ("count = 0", "int count = 0;"),
+            ("total = 0", "int total = 0;"),
+            ("result = ''", "String result = \"\";"),
+            ("best = nums[0]", "int best = nums[0];"),
+            ("for num in nums[1:]:", "for (int i = 1; i < nums.length; i++) { int num = nums[i];"),
+            ("for num in nums:", "for (int num : nums) {"),
+            ("for ch in text:", "for (char ch : text.toCharArray()) {"),
+            ("for i, num in enumerate(nums):", "for (int i = 0; i < nums.length; i++) { int num = nums[i];"),
+            ("if ch.lower() in 'aeiou': count += 1", "if (\"aeiou\".indexOf(Character.toLowerCase(ch)) >= 0) { count += 1; }"),
+            ("if num % 2 == 0: total += num", "if (num % 2 == 0) { total += num; }"),
+            ("if num > best: best = num", "if (num > best) { best = num; }"),
+            ("if num == target: count += 1", "if (num == target) { count += 1; }"),
+            ("result = ch + result", "result = ch + result;"),
+            ("return count", "return count;"),
+            ("return total", "return total;"),
+            ("return best", "return best;"),
+            ("return result", "return result;"),
+            ("stack = []", "stack = new Stack<Character>()"),
+            ("seen = set()", "seen = new HashSet<Integer>()"),
+            ("seen = {}", "seen = new HashMap<Integer, Integer>()"),
+            ("stack.append(ch)", "stack.push(ch);"),
+            ("stack.pop()", "stack.pop();"),
+            ("seen.add(num)", "seen.add(num);"),
+            ("seen[num] = i", "seen.put(num, i);"),
+            ("if target - num in seen:", "if (seen.containsKey(target - num)) {"),
+            ("if num in seen: return True", "if (seen.contains(num)) { return true; }"),
+            ("return [seen[target - num], i]", "return new int[] { seen.get(target - num), i };"),
+            ("return len(stack) == 0", "return stack.isEmpty()"),
+            ("return False", "return false;"),
+            ("return True", "return true;"),
+            ("text[0]", "text.charAt(0)"),
+            ("without using reversed()", "without using built-in reverse helpers"),
+            ("A Python list can be used as a stack with append and pop.", "A Java Stack can be used with push and pop."),
+            ("A list is a simple stack implementation.", "A Stack is a simple way to model this behavior in Java."),
+            ("Sets support fast membership checks.", "A HashSet supports fast membership checks."),
+            ("A dictionary supports quick lookups.", "A HashMap supports quick lookups."),
+        ]
+    else:
+        replacements = [
+            ("Write a function named", "Write a method named"),
+            ("Function + arithmetic", "Method + arithmetic"),
+            ("Function + conditionals", "Method + conditionals"),
+            ("Function + strings", "Method + strings"),
+            ("Function + lists", "Method + arrays/lists"),
+            ("Function + strings + loops", "Method + strings + loops"),
+            ("Function + lists + loops + conditionals", "Method + arrays/lists + loops + conditionals"),
+            ("Function + lists + comparison", "Method + arrays/lists + comparison"),
+            ("Function + lists + counting", "Method + arrays/lists + counting"),
+            ("Most interview coding tasks begin by defining a function.", "Most interview coding tasks begin by defining a method."),
+            ("You should start with def because you are creating a function.", "You should start with a method signature because you are creating a method."),
+            ("You are creating a function, not a class or variable.", "You are creating a method, not a class or variable."),
+            ("The task is to define a function.", "The task is to define a method."),
+            ("You are defining a function.", "You are defining a method."),
+            ("Pick the valid function definition format.", "Pick the valid method definition format."),
+            ("This is the correct Python function header.", "This is the correct C# method header."),
+            ("This is the correct function definition.", "This is the correct method definition."),
+            ("Pick the valid Python function definition.", "Pick the valid C# method definition."),
+            ("Interview functions normally return the result.", "Interview methods normally return the result."),
+            ("The function should return the computed value.", "The method should return the computed value."),
+            ("The function should return the result instead of printing it.", "The method should return the result instead of printing it."),
+            ("str", "string"),
+            ("list", "array/list"),
+            ("dict", "Dictionary"),
+            ("True", "true"),
+            ("False", "false"),
+            ("self.", "this."),
+            ("len(items)", "items.Length"),
+            ("len(stack)", "stack.Count"),
+            ("return n % 2 == 0", "return n % 2 == 0;"),
+            ("return text[0]", "return text[0];"),
+            ("return 'Hello, ' + name", "return \"Hello, \" + name;"),
+            ("return len(items)", "return items.Length;"),
+            ("count = 0", "int count = 0;"),
+            ("total = 0", "int total = 0;"),
+            ("result = ''", "string result = \"\";"),
+            ("best = nums[0]", "int best = nums[0];"),
+            ("for num in nums[1:]:", "for (int i = 1; i < nums.Length; i++) { int num = nums[i];"),
+            ("for num in nums:", "foreach (int num in nums) {"),
+            ("for ch in text:", "foreach (char ch in text) {"),
+            ("for i, num in enumerate(nums):", "for (int i = 0; i < nums.Length; i++) { int num = nums[i];"),
+            ("if ch.lower() in 'aeiou': count += 1", "if (\"aeiou\".Contains(char.ToLower(ch))) { count += 1; }"),
+            ("if num % 2 == 0: total += num", "if (num % 2 == 0) { total += num; }"),
+            ("if num > best: best = num", "if (num > best) { best = num; }"),
+            ("if num == target: count += 1", "if (num == target) { count += 1; }"),
+            ("result = ch + result", "result = ch + result;"),
+            ("return count", "return count;"),
+            ("return total", "return total;"),
+            ("return best", "return best;"),
+            ("return result", "return result;"),
+            ("stack = []", "stack = new Stack<char>()"),
+            ("seen = set()", "seen = new HashSet<int>()"),
+            ("seen = {}", "seen = new Dictionary<int, int>()"),
+            ("stack.append(ch)", "stack.Push(ch);"),
+            ("stack.pop()", "stack.Pop();"),
+            ("seen.add(num)", "seen.Add(num);"),
+            ("seen[num] = i", "seen[num] = i;"),
+            ("if target - num in seen:", "if (seen.ContainsKey(target - num)) {"),
+            ("if num in seen: return True", "if (seen.Contains(num)) { return true; }"),
+            ("return [seen[target - num], i]", "return new int[] { seen[target - num], i };"),
+            ("return len(stack) == 0", "return stack.Count == 0"),
+            ("return False", "return false;"),
+            ("return True", "return true;"),
+            ("without using reversed()", "without using built-in reverse helpers"),
+            ("A Python list can be used as a stack with append and pop.", "A C# Stack<char> can be used with Push and Pop."),
+            ("A list is a simple stack implementation.", "A Stack<char> is a simple way to model this behavior in C#."),
+            ("Sets support fast membership checks.", "A HashSet<int> supports fast membership checks."),
+            ("A dictionary supports quick lookups.", "A Dictionary<int, int> supports quick lookups."),
+        ]
+
+    for old, new in replacements:
+        localized = localized.replace(old, new)
+
+    localized = re.sub(r"def\s+([A-Za-z_][A-Za-z0-9_]*)\(([^)]*)\):", lambda m: _convert_def_header(m, language), localized)
+    localized = re.sub(r"class\s+([A-Za-z_][A-Za-z0-9_]*)\s*:", r"class \1 {", localized)
+    return localized
+
+
+def localize_step(step: StepQuestion, language: str) -> StepQuestion:
+    if language == "python":
+        return step
+    return StepQuestion(
+        prompt=localize_text(step.prompt, language),
+        choices=[localize_text(choice, language) for choice in step.choices],
+        answer_index=step.answer_index,
+        hint=localize_text(step.hint, language),
+        explanation=localize_text(step.explanation, language),
+    )
+
+
+def localize_scenario(scenario: Scenario, language: str) -> Scenario:
+    if language == "python":
+        return scenario
+    return Scenario(
+        level=scenario.level,
+        category=scenario.category,
+        title=f"{scenario.title} ({LANGUAGE_DISPLAY[language]})",
+        prompt=localize_text(scenario.prompt, language),
+        steps=[localize_step(step, language) for step in scenario.steps],
+    )
+
+
+def ask_step(step: StepQuestion, scenario_prompt: str) -> tuple[bool, int, bool]:
     letters = "ABCD"
     hint_count = 0
     used_hint_once = False
 
-    print("\n" + step.prompt)
+    print(color_text("\n─" * 0))
+    print_rule("─", MAGENTA)
+    print(color_text("Problem", BOLD, MAGENTA))
+    print(color_text(scenario_prompt, BLUE))
+    print_rule("─", DIM)
+    print(color_text(step.prompt, BOLD))
+    print()
     for i, choice in enumerate(step.choices):
-        print(f"  {letters[i]}. {choice}")
+        print(f"  {color_text(f'{letters[i]}.', BOLD, CYAN)} {choice}")
+    print()
 
     while True:
-        answer = input("Choose A, B, C, or D. Type H for a hint: ").strip().upper()
+        answer = input("Your choice (A/B/C/D, H for hint, Q to quit/save): ").strip().upper()
+        if answer == "Q":
+            return False, hint_count, True
         if answer == "H":
-            print(f"\nHint: {step.hint}")
+            print(f"\nHint: {step.hint}\n")
             if not used_hint_once:
                 hint_count += 1
                 used_hint_once = True
@@ -135,13 +504,16 @@ def ask_step(step: StepQuestion) -> tuple[bool, int]:
             selected = letters.index(answer)
             is_correct = selected == step.answer_index
             if is_correct:
-                print("Correct.")
+                print(f"\n{GREEN}Correct.{RESET}")
             else:
                 correct_letter = letters[step.answer_index]
-                print(f"Incorrect. Correct answer: {correct_letter}. {step.choices[step.answer_index]}")
-            print(f"Why: {step.explanation}")
-            return is_correct, hint_count
-        print("Please enter A, B, C, D, or H.")
+                print(
+                    f"\n{YELLOW}Incorrect. Correct answer: {correct_letter}. "
+                    f"{step.choices[step.answer_index]}{RESET}"
+                )
+            print(f"Why: {step.explanation}\n")
+            return is_correct, hint_count, False
+        print("\nPlease enter A, B, C, D, H, or Q.\n")
 
 
 # -------------------------------------------------------------------
@@ -1081,29 +1453,36 @@ def generate_hard_pool() -> List[Scenario]:
     return pool
 
 
-def get_pool(level: str) -> List[Scenario]:
+def get_pool(level: str, language: str = "python") -> List[Scenario]:
     if level == "easy":
-        return generate_easy_pool()
-    if level == "medium":
-        return generate_medium_pool()
-    return generate_hard_pool()
+        base = generate_easy_pool()
+    elif level == "medium":
+        base = generate_medium_pool()
+    else:
+        base = generate_hard_pool()
+
+    if language == "python":
+        return base
+    return [localize_scenario(scenario, language) for scenario in base]
 
 
 def play_scenario(
     scenario: Scenario,
     state: Dict,
     category_stats: Dict[str, Dict[str, int]],
-) -> None:
-    print("\n" + "=" * 72)
-    print(f"INTERVIEW SCENARIO: {scenario.title}")
-    print(f"Category: {scenario.category}")
-    print("-" * 72)
-    print(f"Prompt: {scenario.prompt}")
-    print("-" * 72)
-    print(f"Hearts: {hearts_text(state['hearts'])}")
-    print(f"Current Score: {state['score']}/{state['possible']}")
-    print(f"Current Streak: {state['streak']}")
-    print("-" * 72)
+    start_step: int = 0,
+) -> tuple[bool, int]:
+    print_banner(f"INTERVIEW SCENARIO: {scenario.title}", f"Category: {scenario.category}")
+    print_panel(
+        "Round Status",
+        [
+            f"Prompt: {scenario.prompt}",
+            f"Hearts: {hearts_text(state['hearts'])}",
+            f"Current Score: {format_score(state['score'], state['possible'])}",
+            f"Current Streak: {color_text(str(state['streak']), BOLD, YELLOW)}",
+        ],
+        accent=CYAN,
+    )
 
     scenario_correct = 0
     scenario_possible = 0
@@ -1111,8 +1490,11 @@ def play_scenario(
     if scenario.category not in category_stats:
         category_stats[scenario.category] = {"earned": 0, "possible": 0}
 
-    for step in scenario.steps:
-        is_correct, hints_used = ask_step(step)
+    for step_index in range(start_step, len(scenario.steps)):
+        step = scenario.steps[step_index]
+        is_correct, hints_used, wants_quit = ask_step(step, scenario.prompt)
+        if wants_quit:
+            return False, step_index
 
         state["hints_used"] += hints_used
         state["possible"] += 10
@@ -1128,96 +1510,177 @@ def play_scenario(
             if state["streak"] > 0 and state["streak"] % 3 == 0:
                 state["score"] += 5
                 state["bonus"] += 5
-                print("Streak bonus: +5 points")
+                print(color_text("Streak bonus: +5 points", BOLD, GREEN))
         else:
             state["hearts"] = max(0, state["hearts"] - 1)
             state["streak"] = 0
-            print(f"Heart lost. Hearts now: {hearts_text(state['hearts'])}")
+            print(color_text(f"Heart lost. Hearts now: {hearts_text(state['hearts'])}", BOLD, RED))
+
+        print_rule("─", DIM)
 
     if scenario_correct == scenario_possible and state["hearts"] < STARTING_HEARTS:
         state["hearts"] += 1
-        print("Perfect scenario. You regained 1 heart.")
+        print(color_text("Perfect scenario. You regained 1 heart.", BOLD, GREEN))
 
-    print("\nScenario complete.")
-    print(f"Scenario Score: {scenario_correct}/{scenario_possible}")
-    print(f"Overall Score: {state['score']}/{state['possible']}")
-    print(f"Hearts: {hearts_text(state['hearts'])}")
+    print_panel(
+        "Scenario Complete",
+        [
+            f"Scenario Score: {format_score(scenario_correct, scenario_possible)}",
+            f"Overall Score: {format_score(state['score'], state['possible'])}",
+            f"Hearts: {hearts_text(state['hearts'])}",
+        ],
+        accent=GREEN,
+    )
+    return True, len(scenario.steps)
 
 
 def print_category_breakdown(category_stats: Dict[str, Dict[str, int]]) -> None:
-    print("\n" + "=" * 72)
-    print("CATEGORY BREAKDOWN")
-    print("=" * 72)
+    print_banner("CATEGORY BREAKDOWN")
     for category, stats in sorted(category_stats.items()):
         earned = stats["earned"]
         possible = stats["possible"]
         percent = (earned / possible * 100) if possible else 0
-        print(f"{category:<15} {earned:>3}/{possible:<3}  {percent:>6.1f}%")
+        print(f"{category:<15} {earned:>3}/{possible:<3}  {color_text(f'{percent:>6.1f}%', BOLD, CYAN)}")
 
 
 def play_game() -> None:
-    print("=" * 72)
-    print("WHITEBOARD INTERVIEW GAME")
-    print("=" * 72)
-    print("You will play through 10 interview-style coding scenarios.")
-    print("Each scenario makes you work through the problem step by step.")
-    print("Type H at any step if you want a hint.\n")
+    print_banner("WHITEBOARD INTERVIEW GAME", "Step-by-step coding interview practice")
+    print_panel(
+        "How It Works",
+        [
+            "You will play through 10 interview-style coding scenarios.",
+            "Each scenario breaks the problem into guided multiple-choice steps.",
+            f"Use {color_text('H', BOLD, YELLOW)} for a hint and {color_text('Q', BOLD, RED)} to quit/save.",
+        ],
+        accent=BLUE,
+    )
 
-    name = ask_player_name()
-    level = ask_level()
-    pool = get_pool(level)
+    saved = load_saved_game()
 
-    if len(pool) < 100:
-        raise ValueError(f"{level} level must have at least 100 prepared scenarios.")
-
-    selected = random.sample(pool, SESSION_SCENARIOS)
-
-    state = {
-        "score": 0,
-        "possible": 0,
-        "bonus": 0,
-        "streak": 0,
-        "hearts": STARTING_HEARTS,
-        "hints_used": 0,
-    }
-
-    category_stats: Dict[str, Dict[str, int]] = {}
-
-    for i, scenario in enumerate(selected, start=1):
-        print(f"\n\n########## Scenario {i} of {SESSION_SCENARIOS} ##########")
-        play_scenario(scenario, state, category_stats)
-
-    percent = round((state["score"] / state["possible"]) * 100, 1) if state["possible"] else 0
-
-    print("\n" + "=" * 72)
-    print("SESSION COMPLETE")
-    print("=" * 72)
-    print(f"Player: {name}")
-    print(f"Level: {level.title()}")
-    print(f"Final Score: {state['score']}/{state['possible']}")
-    print(f"Percent: {percent}%")
-    print(f"Bonus Points Earned: {state['bonus']}")
-    print(f"Hints Used: {state['hints_used']}")
-    print(f"Hearts Left: {state['hearts']} {hearts_text(state['hearts'])}")
-
-    if percent >= 90:
-        print("Excellent interview-style performance.")
-    elif percent >= 75:
-        print("Strong work. You are building real whiteboarding muscle.")
-    elif percent >= 60:
-        print("Good effort. Review the explanations and run it again.")
+    if saved:
+        resume = input(color_text("Saved game found. Resume where you left off? (y/n): ", BOLD, MAGENTA)).strip().lower()
     else:
-        print("Keep practicing. The step-by-step format will help you improve quickly.")
+        resume = "n"
 
-    print_category_breakdown(category_stats)
+    if saved and resume == "y":
+        name = saved.get("name", "Player")
+        level = saved.get("level", "easy")
+        language = saved.get("language", "python")
+        state = saved.get("state", {
+            "score": 0,
+            "possible": 0,
+            "bonus": 0,
+            "streak": 0,
+            "hearts": STARTING_HEARTS,
+            "hints_used": 0,
+        })
+        category_stats = saved.get("category_stats", {})
+        selected_indices = saved.get("selected_indices", [])
+        scenario_position = int(saved.get("scenario_position", 0))
+        step_position = int(saved.get("step_position", 0))
+        print(color_text("Resuming saved game.", BOLD, GREEN))
+    else:
+        if saved:
+            clear_saved_game()
+        name = ask_player_name()
+        language = ask_language()
+        level = ask_level()
+        state = {
+            "score": 0,
+            "possible": 0,
+            "bonus": 0,
+            "streak": 0,
+            "hearts": STARTING_HEARTS,
+            "hints_used": 0,
+        }
+        category_stats: Dict[str, Dict[str, int]] = {}
+        pool = get_pool(level, language)
+        if len(pool) < 100:
+            raise ValueError(f"{level} level must have at least 100 prepared scenarios.")
+        selected_indices = random.sample(range(len(pool)), SESSION_SCENARIOS)
+        scenario_position = 0
+        step_position = 0
 
-    leaderboard = update_leaderboard(name, state["score"], state["possible"], level, state["hints_used"])
-    print_leaderboard(leaderboard)
+    while True:
+        pool = get_pool(level, language)
+        if len(pool) < 100:
+            raise ValueError(f"{level} level must have at least 100 prepared scenarios.")
 
-    again = input("\nPlay again? (y/n): ").strip().lower()
-    if again == "y":
-        print()
-        play_game()
+        if len(selected_indices) != SESSION_SCENARIOS:
+            selected_indices = random.sample(range(len(pool)), SESSION_SCENARIOS)
+            scenario_position = 0
+            step_position = 0
+
+        selected = [pool[i] for i in selected_indices]
+
+        for i in range(scenario_position, SESSION_SCENARIOS):
+            scenario = selected[i]
+            print_banner(f"Scenario {i + 1} of {SESSION_SCENARIOS}")
+            completed, next_step = play_scenario(
+                scenario,
+                state,
+                category_stats,
+                start_step=step_position if i == scenario_position else 0,
+            )
+            if not completed:
+                save_game_progress(
+                    name,
+                    level,
+                    language,
+                    state,
+                    category_stats,
+                    selected_indices,
+                    i,
+                    next_step,
+                )
+                print(color_text("\nProgress saved. Run the game again to continue later.", BOLD, MAGENTA))
+                return
+
+            scenario_position = i + 1
+            step_position = 0
+
+        percent = round((state["score"] / state["possible"]) * 100, 1) if state["possible"] else 0
+
+        print_banner("SESSION COMPLETE", f"Player: {name}")
+        print_panel(
+            "Final Summary",
+            [
+                f"Level: {level_badge(level)}",
+                f"Question Language: {color_text(LANGUAGE_DISPLAY.get(language, language), BOLD, MAGENTA)}",
+                f"Final Score: {format_score(state['score'], state['possible'])}",
+                f"Percent: {color_text(f'{percent}%', BOLD, GREEN if percent >= 75 else YELLOW)}",
+                f"Bonus Points Earned: {color_text(str(state['bonus']), BOLD, CYAN)}",
+                f"Hints Used: {color_text(str(state['hints_used']), BOLD, YELLOW)}",
+                f"Hearts Left: {state['hearts']} {hearts_text(state['hearts'])}",
+            ],
+            accent=GREEN,
+        )
+
+        if percent >= 90:
+            print(color_text("Excellent interview-style performance.", BOLD, GREEN))
+        elif percent >= 75:
+            print(color_text("Strong work. You are building real whiteboarding muscle.", BOLD, CYAN))
+        elif percent >= 60:
+            print(color_text("Good effort. Review the explanations and run it again.", BOLD, YELLOW))
+        else:
+            print(color_text("Keep practicing. The step-by-step format will help you improve quickly.", BOLD, RED))
+
+        print_category_breakdown(category_stats)
+        clear_saved_game()
+
+        print(color_text("\nThank you for playing.", BOLD, MAGENTA))
+        continue_game = input(color_text("Do you want to continue to another round? (y/n): ", BOLD)).strip().lower()
+
+        if continue_game == "y":
+            selected_indices = random.sample(range(len(pool)), SESSION_SCENARIOS)
+            scenario_position = 0
+            step_position = 0
+            continue
+
+        leaderboard = update_leaderboard(name, state["score"], state["possible"], level, state["hints_used"])
+        print_leaderboard(leaderboard)
+        print(color_text("Goodbye.", BOLD, BLUE))
+        return
 
 
 if __name__ == "__main__":
