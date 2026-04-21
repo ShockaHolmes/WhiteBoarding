@@ -1,0 +1,1224 @@
+import json
+import os
+import random
+from dataclasses import dataclass
+from typing import List, Dict
+
+
+LEADERBOARD_FILE = "whiteboard_leaderboard.json"
+SESSION_SCENARIOS = 10
+STARTING_HEARTS = 12
+
+
+@dataclass
+class StepQuestion:
+    prompt: str
+    choices: List[str]
+    answer_index: int
+    hint: str
+    explanation: str
+
+
+@dataclass
+class Scenario:
+    level: str
+    category: str
+    title: str
+    prompt: str
+    steps: List[StepQuestion]
+
+
+def make_step(prompt: str, correct: str, wrongs: List[str], hint: str, explanation: str) -> StepQuestion:
+    clean_wrongs = []
+    for item in wrongs:
+        if item != correct and item not in clean_wrongs:
+            clean_wrongs.append(item)
+
+    choices = [correct] + clean_wrongs[:3]
+    random.shuffle(choices)
+    answer_index = choices.index(correct)
+    return StepQuestion(
+        prompt=prompt,
+        choices=choices,
+        answer_index=answer_index,
+        hint=hint,
+        explanation=explanation,
+    )
+
+
+def hearts_text(hearts: int) -> str:
+    full = "❤️" * max(0, hearts)
+    empty = "🖤" * max(0, STARTING_HEARTS - hearts)
+    return full + empty
+
+
+def load_leaderboard() -> List[Dict]:
+    if not os.path.exists(LEADERBOARD_FILE):
+        return []
+    try:
+        with open(LEADERBOARD_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_leaderboard(entries: List[Dict]) -> None:
+    with open(LEADERBOARD_FILE, "w", encoding="utf-8") as f:
+        json.dump(entries[:10], f, indent=2)
+
+
+def update_leaderboard(name: str, score: int, possible: int, level: str, hints_used: int) -> List[Dict]:
+    percent = round((score / possible) * 100, 1) if possible else 0
+    entries = load_leaderboard()
+    entries.append({
+        "name": name,
+        "score": score,
+        "possible": possible,
+        "percent": percent,
+        "level": level,
+        "hints_used": hints_used
+    })
+    entries.sort(key=lambda x: (x["score"], x["percent"], -x["hints_used"]), reverse=True)
+    save_leaderboard(entries)
+    return entries[:10]
+
+
+def print_leaderboard(entries: List[Dict]) -> None:
+    print("\n" + "=" * 72)
+    print("LEADERBOARD")
+    print("=" * 72)
+    if not entries:
+        print("No leaderboard entries yet.")
+        return
+    for i, entry in enumerate(entries, start=1):
+        print(
+            f"{i:>2}. {entry['name']:<15} "
+            f"Level: {entry['level']:<6} "
+            f"Score: {entry['score']}/{entry['possible']:<4} "
+            f"Percent: {entry['percent']:>5}% "
+            f"Hints: {entry['hints_used']}"
+        )
+
+
+def ask_level() -> str:
+    while True:
+        level = input("Choose a level (easy / medium / hard): ").strip().lower()
+        if level in {"easy", "medium", "hard"}:
+            return level
+        print("Please type easy, medium, or hard.")
+
+
+def ask_player_name() -> str:
+    name = input("Enter your name for the leaderboard: ").strip()
+    return name if name else "Player"
+
+
+def ask_step(step: StepQuestion) -> tuple[bool, int]:
+    letters = "ABCD"
+    hint_count = 0
+    used_hint_once = False
+
+    print("\n" + step.prompt)
+    for i, choice in enumerate(step.choices):
+        print(f"  {letters[i]}. {choice}")
+
+    while True:
+        answer = input("Choose A, B, C, or D. Type H for a hint: ").strip().upper()
+        if answer == "H":
+            print(f"\nHint: {step.hint}")
+            if not used_hint_once:
+                hint_count += 1
+                used_hint_once = True
+            continue
+        if answer in letters[:len(step.choices)]:
+            selected = letters.index(answer)
+            is_correct = selected == step.answer_index
+            if is_correct:
+                print("Correct.")
+            else:
+                correct_letter = letters[step.answer_index]
+                print(f"Incorrect. Correct answer: {correct_letter}. {step.choices[step.answer_index]}")
+            print(f"Why: {step.explanation}")
+            return is_correct, hint_count
+        print("Please enter A, B, C, D, or H.")
+
+
+# -------------------------------------------------------------------
+# EASY SCENARIOS
+# -------------------------------------------------------------------
+
+def build_easy_add(func_name: str, delta: int) -> Scenario:
+    prompt = f"Write a function named {func_name}(n) that returns n + {delta}."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + arithmetic",
+            ["Class design", "String parsing", "Dictionary lookup"],
+            "You are writing a small reusable piece of logic that performs math.",
+            "This is a function problem using arithmetic."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "Most interview coding tasks begin by defining a function.",
+            "You should start with def because you are creating a function."
+        ),
+        make_step(
+            "3) What data type should n be?",
+            "int",
+            ["str", "list", "dict"],
+            "The prompt says n is a number being added to another number.",
+            "n should be an int because we are doing integer arithmetic."
+        ),
+        make_step(
+            "4) Which function header is correct?",
+            f"def {func_name}(n):",
+            [f"def {func_name}:", f"class {func_name}(n):", f"def {func_name}(n)"],
+            "Look for def, the function name, the parameter, and the colon.",
+            "A valid Python function header needs def, the name, parentheses, and a colon."
+        ),
+        make_step(
+            "5) Which line belongs inside the function?",
+            f"return n + {delta}",
+            [f"print(n + {delta})", f"n + {delta}", f"return '{delta}'"],
+            "Interview solutions usually return the result instead of printing it.",
+            "The function should return the computed value."
+        ),
+    ]
+    return Scenario("easy", "Math", f"Add {delta}", prompt, steps)
+
+
+def build_easy_even(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(n) that returns True if n is even, otherwise False."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + conditionals",
+            ["Class design", "Sorting", "String slicing"],
+            "This uses a function and a true/false check.",
+            "This is a function with conditional logic."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "You are creating a function, not a class or variable.",
+            "Use def first."
+        ),
+        make_step(
+            "3) What data type should n be?",
+            "int",
+            ["str", "list", "dict"],
+            "Even and odd checks are done on integers.",
+            "n should be an integer."
+        ),
+        make_step(
+            "4) Which function header is correct?",
+            f"def {func_name}(n):",
+            [f"def {func_name}:", f"class {func_name}(n):", f"def {func_name}(n)"],
+            "Pick the valid function definition format.",
+            "This is the correct Python function header."
+        ),
+        make_step(
+            "5) Which line best solves the problem?",
+            "return n % 2 == 0",
+            ["return n / 2 == 0", "print(n % 2)", "return n % 2"],
+            "Use remainder to tell whether a number divides evenly by 2.",
+            "If n % 2 equals 0, the number is even."
+        ),
+    ]
+    return Scenario("easy", "Conditionals", "Even Check", prompt, steps)
+
+
+def build_easy_first_char(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(text) that returns the first character of the string."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + strings",
+            ["Class design", "Binary search", "Nested loops"],
+            "You are working with text inside a function.",
+            "This is a string problem inside a function."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The task is to define a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) What data type should text be?",
+            "str",
+            ["int", "list", "dict"],
+            "The prompt says text is a string.",
+            "text should be a str."
+        ),
+        make_step(
+            "4) Which function header is correct?",
+            f"def {func_name}(text):",
+            [f"class {func_name}(text):", f"def {func_name}:", f"def {func_name}(text)"],
+            "Pick the valid function header with a colon.",
+            "This is the correct function definition."
+        ),
+        make_step(
+            "5) Which line belongs inside the function?",
+            "return text[0]",
+            ["return text(0)", "print(text[0])", "return text[-1]"],
+            "String indexing starts at 0 for the first character.",
+            "text[0] returns the first character."
+        ),
+    ]
+    return Scenario("easy", "Strings", "First Character", prompt, steps)
+
+
+def build_easy_list_len(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(items) that returns how many items are in the list."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + lists",
+            ["Class inheritance", "File handling", "Recursion"],
+            "The task is about counting items in a list.",
+            "This is a function using list knowledge."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "You are defining a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) What data type should items be?",
+            "list",
+            ["str", "int", "bool"],
+            "The prompt directly says list.",
+            "items should be a list."
+        ),
+        make_step(
+            "4) Which function header is correct?",
+            f"def {func_name}(items):",
+            [f"def {func_name}:", f"class {func_name}(items):", f"def {func_name}(items)"],
+            "Look for the valid function format.",
+            "This is the correct header."
+        ),
+        make_step(
+            "5) Which line solves the problem?",
+            "return len(items)",
+            ["print(len(items))", "return items[0]", "return items + 1"],
+            "len(...) counts how many elements are in a list.",
+            "len(items) returns the number of elements."
+        ),
+    ]
+    return Scenario("easy", "Lists", "List Length", prompt, steps)
+
+
+def build_easy_greet(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(name) that returns the string 'Hello, ' followed by the name."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + strings",
+            ["Class construction", "Graph traversal", "Math only"],
+            "The task builds and returns a string.",
+            "This is a string function."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "You are creating a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) What data type should name be?",
+            "str",
+            ["int", "list", "dict"],
+            "A person's name is text.",
+            "name should be a string."
+        ),
+        make_step(
+            "4) Which function header is correct?",
+            f"def {func_name}(name):",
+            [f"def {func_name}:", f"class {func_name}(name):", f"def {func_name}(name)"],
+            "Pick the valid Python function definition.",
+            "This is the correct function header."
+        ),
+        make_step(
+            "5) Which line belongs inside the function?",
+            "return 'Hello, ' + name",
+            ["print('Hello, ' + name)", "return Hello, name", "return name + 1"],
+            "Return the new string instead of printing it.",
+            "String concatenation joins the greeting and the name."
+        ),
+    ]
+    return Scenario("easy", "Strings", "Greeting", prompt, steps)
+
+
+def generate_easy_pool() -> List[Scenario]:
+    pool = []
+
+    add_names = [f"add_bonus_{i}" for i in range(1, 26)]
+    for i, name in enumerate(add_names, start=1):
+        pool.append(build_easy_add(name, i))
+
+    even_names = [f"is_even_{i}" for i in range(1, 26)]
+    for name in even_names:
+        pool.append(build_easy_even(name))
+
+    first_names = [f"first_char_{i}" for i in range(1, 26)]
+    for name in first_names:
+        pool.append(build_easy_first_char(name))
+
+    len_names = [f"count_items_{i}" for i in range(1, 26)]
+    for name in len_names:
+        pool.append(build_easy_list_len(name))
+
+    greet_names = [f"greet_user_{i}" for i in range(1, 26)]
+    for name in greet_names:
+        pool.append(build_easy_greet(name))
+
+    return pool
+
+
+# -------------------------------------------------------------------
+# MEDIUM SCENARIOS
+# -------------------------------------------------------------------
+
+def build_medium_count_vowels(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(text) that returns how many vowels are in the string."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + strings + loops",
+            ["Class inheritance", "Binary tree", "SQL query"],
+            "You need to inspect each character in text.",
+            "This is a function using strings and iteration."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "You are writing a reusable function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(text):",
+            [f"def {func_name}:", f"class {func_name}(text):", f"def {func_name}(text)"],
+            "Look for a valid Python header with a colon.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "4) What is a good variable to set up before the loop?",
+            "count = 0",
+            ["count = []", "count = ''", "count = False"],
+            "You are counting how many matches you find.",
+            "A numeric counter should start at 0."
+        ),
+        make_step(
+            "5) Which loop belongs in the solution?",
+            "for ch in text:",
+            ["for ch in range(text):", "while text:", "for text in ch:"],
+            "You want to visit each character in the string.",
+            "Looping directly over the string gives each character."
+        ),
+        make_step(
+            "6) Which update line is best?",
+            "if ch.lower() in 'aeiou': count += 1",
+            ["if ch == 'aeiou': count += 1", "count += ch", "if text in ch: count += 1"],
+            "Lowercasing helps catch both uppercase and lowercase vowels.",
+            "This correctly counts vowels one character at a time."
+        ),
+        make_step(
+            "7) How should the function finish?",
+            "return count",
+            ["print(count)", "return text", "return ch"],
+            "Interview functions normally return the result.",
+            "The final answer is the total vowel count."
+        ),
+    ]
+    return Scenario("medium", "Strings", "Count Vowels", prompt, steps)
+
+
+def build_medium_sum_evens(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(nums) that returns the sum of only the even numbers in a list."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + lists + loops + conditionals",
+            ["Class design", "Recursion only", "String formatting"],
+            "You need to scan a list and conditionally add values.",
+            "This combines list traversal and conditional logic."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "You are building a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(nums):",
+            [f"def {func_name}:", f"def {func_name}(nums)", f"class {func_name}(nums):"],
+            "Pick the valid function definition.",
+            "That is the correct header."
+        ),
+        make_step(
+            "4) What variable should you set up first?",
+            "total = 0",
+            ["total = []", "total = ''", "total = None"],
+            "You need a running numeric total.",
+            "The sum should start at 0."
+        ),
+        make_step(
+            "5) Which loop belongs in the function?",
+            "for num in nums:",
+            ["for num in range(nums):", "while nums:", "for nums in num:"],
+            "You want each value from the list.",
+            "This loop gives each number in the list."
+        ),
+        make_step(
+            "6) Which logic block is best?",
+            "if num % 2 == 0: total += num",
+            ["if num / 2 == 0: total += num", "if num % 2: total += num", "total += nums"],
+            "Even numbers leave remainder 0 when divided by 2.",
+            "This correctly adds only even numbers."
+        ),
+        make_step(
+            "7) How should the function finish?",
+            "return total",
+            ["print(total)", "return nums", "return num"],
+            "Return the accumulated answer.",
+            "The final result is the total sum of even numbers."
+        ),
+    ]
+    return Scenario("medium", "Loops", "Sum Evens", prompt, steps)
+
+
+def build_medium_find_max(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(nums) that returns the largest value in a non-empty list."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + lists + comparison",
+            ["Class design", "File parsing", "HTML rendering"],
+            "You must scan the list and compare values.",
+            "This is a list comparison problem."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "You are creating a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(nums):",
+            [f"class {func_name}(nums):", f"def {func_name}:", f"def {func_name}(nums)"],
+            "Pick the valid Python function definition.",
+            "That is the correct header."
+        ),
+        make_step(
+            "4) What is a good starting value for best?",
+            "best = nums[0]",
+            ["best = 0", "best = ''", "best = []"],
+            "The prompt says the list is non-empty.",
+            "Starting with the first list item works for all numeric values."
+        ),
+        make_step(
+            "5) Which loop is best after that?",
+            "for num in nums[1:]:",
+            ["for num in nums[0]:", "for num in range(nums):", "while num in nums:"],
+            "You already used the first item as the starting best.",
+            "This checks the rest of the list."
+        ),
+        make_step(
+            "6) Which update line is correct?",
+            "if num > best: best = num",
+            ["if num < best: best = num", "best += num", "if best in num: best = num"],
+            "Only replace best when you find a larger number.",
+            "This keeps track of the largest value seen so far."
+        ),
+        make_step(
+            "7) How should the function finish?",
+            "return best",
+            ["print(best)", "return nums", "return num"],
+            "Return the largest value found.",
+            "best holds the answer at the end."
+        ),
+    ]
+    return Scenario("medium", "Lists", "Find Max", prompt, steps)
+
+
+def build_medium_count_target(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(nums, target) that returns how many times target appears in nums."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + lists + counting",
+            ["Class design", "Binary search only", "Tree recursion"],
+            "You are scanning a list and counting matches.",
+            "This is a counting problem over a list."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The prompt asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(nums, target):",
+            [f"def {func_name}(target):", f"class {func_name}(nums, target):", f"def {func_name}(nums, target)"],
+            "Make sure both parameters are included and the colon is present.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "4) What variable should you set up first?",
+            "count = 0",
+            ["count = []", "count = ''", "count = True"],
+            "You need to track the number of matches.",
+            "A counter should start at 0."
+        ),
+        make_step(
+            "5) Which loop belongs in the function?",
+            "for num in nums:",
+            ["for num in range(nums):", "while nums:", "for nums in num:"],
+            "You want to inspect each value in the list.",
+            "This loop visits each list element."
+        ),
+        make_step(
+            "6) Which logic line is correct?",
+            "if num == target: count += 1",
+            ["if num = target: count += 1", "if target in num: count += 1", "count += target"],
+            "Increase the count only when the current item matches target.",
+            "This correctly counts each occurrence of target."
+        ),
+        make_step(
+            "7) How should the function finish?",
+            "return count",
+            ["print(count)", "return target", "return nums"],
+            "Return the final count.",
+            "count holds the number of occurrences."
+        ),
+    ]
+    return Scenario("medium", "Counting", "Count Target", prompt, steps)
+
+
+def build_medium_reverse_string(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(text) that returns the reversed string without using reversed()."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + strings + loops",
+            ["Class construction", "Database query", "Graph search"],
+            "You need to process a string character by character.",
+            "This is a string manipulation problem with iteration."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "You are building a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(text):",
+            [f"def {func_name}:", f"def {func_name}(text)", f"class {func_name}(text):"],
+            "Choose the valid Python function header.",
+            "That is the correct header."
+        ),
+        make_step(
+            "4) What variable should you set up first?",
+            "result = ''",
+            ["result = 0", "result = []", "result = False"],
+            "The final answer will be a string.",
+            "A string accumulator can start as an empty string."
+        ),
+        make_step(
+            "5) Which loop belongs in the function?",
+            "for ch in text:",
+            ["for ch in range(text):", "while text:", "for text in ch:"],
+            "You want to visit each character.",
+            "This iterates through the string one character at a time."
+        ),
+        make_step(
+            "6) Which update line reverses the text?",
+            "result = ch + result",
+            ["result = result + ch", "result += text", "ch = result + ch"],
+            "Put the new character in front of the existing result.",
+            "Prepending each character reverses the order."
+        ),
+        make_step(
+            "7) How should the function finish?",
+            "return result",
+            ["print(result)", "return text", "return ch"],
+            "Return the finished reversed string.",
+            "result contains the reversed text."
+        ),
+    ]
+    return Scenario("medium", "Strings", "Reverse String", prompt, steps)
+
+
+def generate_medium_pool() -> List[Scenario]:
+    pool = []
+
+    for i in range(1, 25):
+        pool.append(build_medium_count_vowels(f"count_vowels_{i}"))
+        pool.append(build_medium_sum_evens(f"sum_evens_{i}"))
+        pool.append(build_medium_find_max(f"find_max_{i}"))
+        pool.append(build_medium_count_target(f"count_target_{i}"))
+        pool.append(build_medium_reverse_string(f"reverse_text_{i}"))
+
+    return pool
+
+
+# -------------------------------------------------------------------
+# HARD SCENARIOS
+# -------------------------------------------------------------------
+
+def build_hard_class_counter(class_name: str) -> Scenario:
+    prompt = (
+        f"Design a class named {class_name}. "
+        f"It should store a starting value and have an increment() method that adds 1 and returns the new value."
+    )
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "OOP / class design",
+            ["Simple string slicing", "File reading", "One-line arithmetic only"],
+            "The prompt says to design a class with stored state and methods.",
+            "This is an object-oriented design problem."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "class",
+            ["def", "str", "int"],
+            "The prompt explicitly asks for a class.",
+            "Start with class when building an object."
+        ),
+        make_step(
+            "3) Which class header is correct?",
+            f"class {class_name}:",
+            [f"def {class_name}:", f"class {class_name}", f"class {class_name}()"],
+            "Python class definitions use class Name: with a colon.",
+            "That is the correct class header."
+        ),
+        make_step(
+            "4) Which constructor header is correct?",
+            "def __init__(self, start):",
+            ["def __init__(start):", "def __init__(self):", "class __init__(self, start):"],
+            "Instance methods receive self as the first parameter.",
+            "The constructor should accept self and the starting value."
+        ),
+        make_step(
+            "5) Which line stores the starting value on the object?",
+            "self.value = start",
+            ["value = self.start", "start = self.value", "self = start"],
+            "Object state is usually stored with self.attribute = ...",
+            "This stores the value on the instance."
+        ),
+        make_step(
+            "6) Which method header is correct?",
+            "def increment(self):",
+            ["def increment():", "class increment(self):", "def increment(self)"],
+            "Methods need self and a colon.",
+            "That is the correct method header."
+        ),
+        make_step(
+            "7) Which line updates the stored value correctly?",
+            "self.value += 1",
+            ["value += 1", "self += 1", "self.value =+ 1"],
+            "You want to change the object's stored value.",
+            "This increments the instance value by 1."
+        ),
+        make_step(
+            "8) How should increment finish?",
+            "return self.value",
+            ["print(self.value)", "return start", "return 1"],
+            "Interview methods usually return the updated value when asked.",
+            "The method should return the new stored value."
+        ),
+    ]
+    return Scenario("hard", "OOP", "Class Counter", prompt, steps)
+
+
+def build_hard_two_sum(func_name: str) -> Scenario:
+    prompt = (
+        f"Write a function named {func_name}(nums, target) that returns the indexes of two numbers "
+        f"whose values add up to target. Solve it efficiently."
+    )
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Hash map / array search",
+            ["Class inheritance", "Simple string output", "Drawing shapes"],
+            "The word efficiently suggests using extra structure for fast lookup.",
+            "This is a classic array + hash map interview problem."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "You are implementing a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(nums, target):",
+            [f"def {func_name}(nums):", f"class {func_name}(nums, target):", f"def {func_name}(nums, target)"],
+            "You need both nums and target parameters plus a colon.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "4) Which data structure is best to use for an efficient solution?",
+            "dict",
+            ["str", "tuple", "float"],
+            "You need fast lookup of values you've already seen.",
+            "A dictionary supports quick lookups."
+        ),
+        make_step(
+            "5) Which setup line is best?",
+            "seen = {}",
+            ["seen = []", "seen = ''", "seen = ()"],
+            "You need a dictionary to map number to index.",
+            "seen should start as an empty dictionary."
+        ),
+        make_step(
+            "6) Which loop belongs in the solution?",
+            "for i, num in enumerate(nums):",
+            ["for i in nums:", "while nums:", "for num in range(nums):"],
+            "You need both the number and its index.",
+            "enumerate gives both index and value."
+        ),
+        make_step(
+            "7) Which check is correct?",
+            "if target - num in seen:",
+            ["if target + num in seen:", "if num in target:", "if target in seen[num]:"],
+            "You want to know whether the matching complement appeared earlier.",
+            "This checks for the needed partner value."
+        ),
+        make_step(
+            "8) Which return line is correct once the complement is found?",
+            "return [seen[target - num], i]",
+            ["return [num, target]", "return [i, num]", "return seen"],
+            "Return the earlier index and the current index.",
+            "The dictionary stores the earlier index for the complement."
+        ),
+        make_step(
+            "9) Which update line is correct when the complement is not found?",
+            "seen[num] = i",
+            ["seen[i] = num", "seen.add(num)", "num = seen[i]"],
+            "Store the current number and where you found it.",
+            "This lets later elements find its index quickly."
+        ),
+        make_step(
+            "10) What is the time complexity of this efficient approach?",
+            "O(n)",
+            ["O(1)", "O(n^2)", "O(log n)"],
+            "You pass through the list once, using fast dictionary lookups.",
+            "One pass over n items gives O(n) time."
+        ),
+    ]
+    return Scenario("hard", "Algorithms", "Two Sum", prompt, steps)
+
+
+def build_hard_binary_search(func_name: str) -> Scenario:
+    prompt = (
+        f"Write a function named {func_name}(nums, target) that returns the index of target using binary search, "
+        f"or -1 if target is not found."
+    )
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Algorithm / binary search",
+            ["Class construction", "String concatenation", "File upload"],
+            "The prompt directly says binary search.",
+            "This is a search algorithm problem."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "You are implementing a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) What must be true for binary search to work correctly?",
+            "The list must be sorted",
+            ["The list must be reversed", "The list must contain only strings", "The list must be a set"],
+            "Binary search relies on ordered values.",
+            "Without sorted order, binary search decisions are not valid."
+        ),
+        make_step(
+            "4) Which function header is correct?",
+            f"def {func_name}(nums, target):",
+            [f"def {func_name}(nums):", f"class {func_name}(nums, target):", f"def {func_name}(nums, target)"],
+            "You need nums, target, and a colon.",
+            "That is the correct header."
+        ),
+        make_step(
+            "5) Which setup line is correct?",
+            "left, right = 0, len(nums) - 1",
+            ["left, right = 1, len(nums)", "left, right = 0, len(nums)", "left = right = nums"],
+            "Indexes start at 0 and the last valid index is len(nums)-1.",
+            "These are the correct initial boundaries."
+        ),
+        make_step(
+            "6) Which line computes the middle index?",
+            "mid = (left + right) // 2",
+            ["mid = (left + right) / 2", "mid = left + right", "mid = nums[left:right]"],
+            "Use integer division for a valid index.",
+            "This correctly computes the midpoint index."
+        ),
+        make_step(
+            "7) If nums[mid] < target, what should you do?",
+            "left = mid + 1",
+            ["right = mid - 1", "return mid", "left = mid - 1"],
+            "If the middle value is too small, search the right half.",
+            "Move the left boundary past mid."
+        ),
+        make_step(
+            "8) If nums[mid] > target, what should you do?",
+            "right = mid - 1",
+            ["left = mid + 1", "return -1", "right = mid + 1"],
+            "If the middle value is too large, search the left half.",
+            "Move the right boundary leftward."
+        ),
+        make_step(
+            "9) What should you return if the loop ends without finding target?",
+            "-1",
+            ["0", "None", "target"],
+            "The prompt tells you what to return when not found.",
+            "Return -1 when the target does not exist in the list."
+        ),
+        make_step(
+            "10) What is the time complexity of binary search?",
+            "O(log n)",
+            ["O(1)", "O(n)", "O(n^2)"],
+            "The search space is cut in half each step.",
+            "Halving the remaining work each time gives O(log n)."
+        ),
+    ]
+    return Scenario("hard", "Algorithms", "Binary Search", prompt, steps)
+
+
+def build_hard_valid_parentheses(func_name: str) -> Scenario:
+    prompt = (
+        f"Write a function named {func_name}(text) that returns True if every opening bracket has a matching closing bracket "
+        f"in the correct order."
+    )
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Stack problem",
+            ["Simple arithmetic", "Class inheritance", "String slicing only"],
+            "Matching nested symbols is a classic stack pattern.",
+            "This is typically solved with a stack."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The task asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(text):",
+            [f"def {func_name}:", f"class {func_name}(text):", f"def {func_name}(text)"],
+            "Choose the valid function definition.",
+            "That is the correct header."
+        ),
+        make_step(
+            "4) Which data structure is best for the stack?",
+            "list",
+            ["float", "str", "bool"],
+            "A Python list can be used as a stack with append and pop.",
+            "A list is a simple stack implementation."
+        ),
+        make_step(
+            "5) Which setup line is correct?",
+            "stack = []",
+            ["stack = {}", "stack = ''", "stack = 0"],
+            "The stack should begin empty.",
+            "An empty list is a good starting stack."
+        ),
+        make_step(
+            "6) When you see an opening bracket, what should you do?",
+            "stack.append(ch)",
+            ["stack.pop(ch)", "return ch", "stack += ch[0]"],
+            "Opening symbols should be remembered for later matching.",
+            "Push opening brackets onto the stack."
+        ),
+        make_step(
+            "7) When you see a closing bracket and the stack is empty, what should happen?",
+            "return False",
+            ["return True", "stack.append(ch)", "continue"],
+            "A closer without an opener is invalid immediately.",
+            "An unmatched closing bracket means the string is invalid."
+        ),
+        make_step(
+            "8) After successfully matching a closing bracket, what should happen?",
+            "stack.pop()",
+            ["stack.append(ch)", "return False", "text.pop()"],
+            "Remove the matching opener from the stack.",
+            "Pop the matched opening bracket."
+        ),
+        make_step(
+            "9) How should the function finish after the loop?",
+            "return len(stack) == 0",
+            ["return stack", "return True", "print(stack)"],
+            "Any leftover openers mean the string is invalid.",
+            "The stack must be empty for the brackets to be balanced."
+        ),
+        make_step(
+            "10) What is the time complexity of this approach?",
+            "O(n)",
+            ["O(1)", "O(log n)", "O(n^2)"],
+            "You examine each character once.",
+            "One pass over the text gives O(n) time."
+        ),
+    ]
+    return Scenario("hard", "Stacks", "Valid Parentheses", prompt, steps)
+
+
+def build_hard_has_duplicate(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(nums) that returns True if the list contains any duplicate value."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Set / membership problem",
+            ["Class design", "String formatting", "HTML output"],
+            "You need a fast way to know whether a value was already seen.",
+            "A set is a natural fit for duplicate detection."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The prompt asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(nums):",
+            [f"def {func_name}:", f"class {func_name}(nums):", f"def {func_name}(nums)"],
+            "Pick the valid Python function definition.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "4) Which data structure is best?",
+            "set",
+            ["tuple", "float", "str"],
+            "Sets support fast membership checks.",
+            "A set helps detect duplicates efficiently."
+        ),
+        make_step(
+            "5) Which setup line is correct?",
+            "seen = set()",
+            ["seen = {}", "seen = []", "seen = ''"],
+            "You want an empty set, not a dictionary or list.",
+            "set() creates an empty set."
+        ),
+        make_step(
+            "6) Which loop belongs in the function?",
+            "for num in nums:",
+            ["for num in range(nums):", "while nums:", "for nums in num:"],
+            "You need to inspect each value once.",
+            "This loop visits each item in the list."
+        ),
+        make_step(
+            "7) Which check correctly detects a duplicate?",
+            "if num in seen: return True",
+            ["if seen in num: return True", "if num == seen: return True", "if num not in seen: return True"],
+            "A duplicate is found when the current number was already seen earlier.",
+            "This is the correct membership check."
+        ),
+        make_step(
+            "8) What should happen when the number is not already in seen?",
+            "seen.add(num)",
+            ["seen[num] = True", "seen.append(num)", "num.add(seen)"],
+            "Store the new value so later items can be checked against it.",
+            "add inserts the value into the set."
+        ),
+        make_step(
+            "9) What should the function return after finishing the loop with no duplicates found?",
+            "return False",
+            ["return True", "return nums", "return seen"],
+            "If you never found a repeated value, the answer is false.",
+            "No duplicate was detected."
+        ),
+        make_step(
+            "10) What is the time complexity of this efficient approach?",
+            "O(n)",
+            ["O(1)", "O(log n)", "O(n^2)"],
+            "You scan the list once with quick set lookups.",
+            "One pass gives O(n) time on average."
+        ),
+    ]
+    return Scenario("hard", "Sets", "Has Duplicate", prompt, steps)
+
+
+def generate_hard_pool() -> List[Scenario]:
+    pool = []
+
+    for i in range(1, 25):
+        pool.append(build_hard_class_counter(f"Counter{i}"))
+        pool.append(build_hard_two_sum(f"two_sum_{i}"))
+        pool.append(build_hard_binary_search(f"binary_search_{i}"))
+        pool.append(build_hard_valid_parentheses(f"is_balanced_{i}"))
+        pool.append(build_hard_has_duplicate(f"has_duplicate_{i}"))
+
+    return pool
+
+
+def get_pool(level: str) -> List[Scenario]:
+    if level == "easy":
+        return generate_easy_pool()
+    if level == "medium":
+        return generate_medium_pool()
+    return generate_hard_pool()
+
+
+def play_scenario(
+    scenario: Scenario,
+    state: Dict,
+    category_stats: Dict[str, Dict[str, int]],
+) -> None:
+    print("\n" + "=" * 72)
+    print(f"INTERVIEW SCENARIO: {scenario.title}")
+    print(f"Category: {scenario.category}")
+    print("-" * 72)
+    print(f"Prompt: {scenario.prompt}")
+    print("-" * 72)
+    print(f"Hearts: {hearts_text(state['hearts'])}")
+    print(f"Current Score: {state['score']}/{state['possible']}")
+    print(f"Current Streak: {state['streak']}")
+    print("-" * 72)
+
+    scenario_correct = 0
+    scenario_possible = 0
+
+    if scenario.category not in category_stats:
+        category_stats[scenario.category] = {"earned": 0, "possible": 0}
+
+    for step in scenario.steps:
+        is_correct, hints_used = ask_step(step)
+
+        state["hints_used"] += hints_used
+        state["possible"] += 10
+        scenario_possible += 10
+        category_stats[scenario.category]["possible"] += 10
+
+        if is_correct:
+            state["score"] += 10
+            scenario_correct += 10
+            category_stats[scenario.category]["earned"] += 10
+            state["streak"] += 1
+
+            if state["streak"] > 0 and state["streak"] % 3 == 0:
+                state["score"] += 5
+                state["bonus"] += 5
+                print("Streak bonus: +5 points")
+        else:
+            state["hearts"] = max(0, state["hearts"] - 1)
+            state["streak"] = 0
+            print(f"Heart lost. Hearts now: {hearts_text(state['hearts'])}")
+
+    if scenario_correct == scenario_possible and state["hearts"] < STARTING_HEARTS:
+        state["hearts"] += 1
+        print("Perfect scenario. You regained 1 heart.")
+
+    print("\nScenario complete.")
+    print(f"Scenario Score: {scenario_correct}/{scenario_possible}")
+    print(f"Overall Score: {state['score']}/{state['possible']}")
+    print(f"Hearts: {hearts_text(state['hearts'])}")
+
+
+def print_category_breakdown(category_stats: Dict[str, Dict[str, int]]) -> None:
+    print("\n" + "=" * 72)
+    print("CATEGORY BREAKDOWN")
+    print("=" * 72)
+    for category, stats in sorted(category_stats.items()):
+        earned = stats["earned"]
+        possible = stats["possible"]
+        percent = (earned / possible * 100) if possible else 0
+        print(f"{category:<15} {earned:>3}/{possible:<3}  {percent:>6.1f}%")
+
+
+def play_game() -> None:
+    print("=" * 72)
+    print("WHITEBOARD INTERVIEW GAME")
+    print("=" * 72)
+    print("You will play through 10 interview-style coding scenarios.")
+    print("Each scenario makes you work through the problem step by step.")
+    print("Type H at any step if you want a hint.\n")
+
+    name = ask_player_name()
+    level = ask_level()
+    pool = get_pool(level)
+
+    if len(pool) < 100:
+        raise ValueError(f"{level} level must have at least 100 prepared scenarios.")
+
+    selected = random.sample(pool, SESSION_SCENARIOS)
+
+    state = {
+        "score": 0,
+        "possible": 0,
+        "bonus": 0,
+        "streak": 0,
+        "hearts": STARTING_HEARTS,
+        "hints_used": 0,
+    }
+
+    category_stats: Dict[str, Dict[str, int]] = {}
+
+    for i, scenario in enumerate(selected, start=1):
+        print(f"\n\n########## Scenario {i} of {SESSION_SCENARIOS} ##########")
+        play_scenario(scenario, state, category_stats)
+
+    percent = round((state["score"] / state["possible"]) * 100, 1) if state["possible"] else 0
+
+    print("\n" + "=" * 72)
+    print("SESSION COMPLETE")
+    print("=" * 72)
+    print(f"Player: {name}")
+    print(f"Level: {level.title()}")
+    print(f"Final Score: {state['score']}/{state['possible']}")
+    print(f"Percent: {percent}%")
+    print(f"Bonus Points Earned: {state['bonus']}")
+    print(f"Hints Used: {state['hints_used']}")
+    print(f"Hearts Left: {state['hearts']} {hearts_text(state['hearts'])}")
+
+    if percent >= 90:
+        print("Excellent interview-style performance.")
+    elif percent >= 75:
+        print("Strong work. You are building real whiteboarding muscle.")
+    elif percent >= 60:
+        print("Good effort. Review the explanations and run it again.")
+    else:
+        print("Keep practicing. The step-by-step format will help you improve quickly.")
+
+    print_category_breakdown(category_stats)
+
+    leaderboard = update_leaderboard(name, state["score"], state["possible"], level, state["hints_used"])
+    print_leaderboard(leaderboard)
+
+    again = input("\nPlay again? (y/n): ").strip().lower()
+    if again == "y":
+        print()
+        play_game()
+
+
+if __name__ == "__main__":
+    play_game()
