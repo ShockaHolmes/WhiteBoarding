@@ -6,5 +6,77 @@
     "percent": 106.0,
     "level": "easy",
     "hints_used": 0
+  },
+  {
+    "name": "Shocka [CodeWrite:Nested Loops]",
+    "score": 45,
+    "possible": 50,
+    "percent": 90.0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Shocka [Practice:For Loops]",
+    "score": 35,
+    "possible": 50,
+    "percent": 70.0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Shocka [CodeWrite:Functions]",
+    "score": 30,
+    "possible": 50,
+    "percent": 60.0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Shocka [CodeWrite:Nested Loops]",
+    "score": 20,
+    "possible": 50,
+    "percent": 40.0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Shocka [Practice:Nested Loops]",
+    "score": 10,
+    "possible": 50,
+    "percent": 20.0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Tester [CodeWrite:For Loops]",
+    "score": 0,
+    "possible": 0,
+    "percent": 0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Shocka [CodeWrite:For Loops]",
+    "score": 0,
+    "possible": 20,
+    "percent": 0.0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Tester [CodeWrite:Nested Loops]",
+    "score": 0,
+    "possible": 10,
+    "percent": 0.0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Tester [CodeWrite:Nested Loops]",
+    "score": 0,
+    "possible": 10,
+    "percent": 0.0,
+    "level": "easy",
+    "hints_used": 0
   }
 ]

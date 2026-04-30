@@ -7,11 +7,12 @@ You play through 10 scenarios at a selected difficulty level:
 - medium
 - hard
 
-Each scenario is broken into step-by-step multiple-choice questions with optional hints.
+Each scenario is broken into step-by-step interview questions with optional hints.
 
 ## Features
 
 - 10 random scenarios per session
+- Three gameplay modes (Classic, Practice, Code Write)
 - Three difficulty levels
 - Separate question banks for Python, Java, and C#
 - 125 prepared scenarios per level for each language
@@ -42,6 +43,11 @@ python3 Whiteboarding_Interview
 - H: show a hint for the current step
 - Q: quit early, save progress, and exit
 
+In Code Write Mode:
+- Type your code answer directly (instead of selecting A/B/C/D)
+- H: show a hint
+- Q: quit the current drill and return/save as prompted
+
 ## How the Game Works
 
 1. Enter your name.
@@ -55,6 +61,11 @@ python3 Whiteboarding_Interview
 6. At the end, the game says "Thank you for playing" and asks if you want to continue.
    - If yes, you play another round with your current score/stats preserved.
    - If no, the game says "Goodbye" and exits.
+
+Main menu modes:
+- Classic Mode: 10 random interview scenarios
+- Practice Mode: choose a topic and answer 5 multiple-choice questions
+- Code Write Mode: choose a topic and type code answers for 5 questions
 
 ## Save and Resume
 

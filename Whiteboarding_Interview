@@ -4,7 +4,7 @@ import random
 import re
 import shutil
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
 
 
 LEADERBOARD_FILE = "whiteboard_leaderboard.json"
@@ -527,6 +527,146 @@ def ask_step(step: StepQuestion, scenario_prompt: str) -> tuple[bool, int, bool]
             print(f"Why: {step.explanation}\n")
             return is_correct, hint_count, False
         print("\nPlease enter A, B, C, D, H, or Q.\n")
+
+
+def _normalize_code_answer(text: str) -> str:
+    # Normalize whitespace and casing so equivalent code formatting is accepted.
+    return " ".join(text.strip().lower().split())
+
+
+NUMBER_WORD_MAP = {
+    "zero": "0",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+}
+
+SYNONYM_WORD_MAP = {
+    "inner": "contains",
+    "inside": "contains",
+    "within": "contains",
+    "includes": "contains",
+    "include": "contains",
+    "nested": "contains",
+    "method": "function",
+    "func": "function",
+    "arrays": "list",
+    "array": "list",
+    "lists": "list",
+    "dictionary": "dict",
+    "hashmap": "dict",
+    "map": "dict",
+    "booleans": "bool",
+    "boolean": "bool",
+}
+
+
+def _canonical_token(token: str) -> str:
+    normalized = NUMBER_WORD_MAP.get(token, token)
+    return SYNONYM_WORD_MAP.get(normalized, normalized)
+
+
+def _answer_tokens(text: str) -> List[str]:
+    raw_tokens = re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*|\d+", text.lower())
+    return [_canonical_token(token) for token in raw_tokens]
+
+
+def _key_tokens(text: str) -> List[str]:
+    stop = {
+        "a", "an", "and", "as", "at", "be", "for", "from", "if", "in", "is", "it", "of", "on",
+        "or", "that", "the", "to", "with", "what", "which", "should", "named", "returns", "return",
+    }
+    seen: set[str] = set()
+    keys: List[str] = []
+    for token in _answer_tokens(text):
+        if token in stop:
+            continue
+        if len(token) == 1 and not token.isdigit():
+            continue
+        if token not in seen:
+            keys.append(token)
+            seen.add(token)
+    return keys
+
+
+def _code_answer_matches(user_answer: str, correct_answer: str) -> bool:
+    user_norm = _normalize_code_answer(user_answer)
+    correct_norm = _normalize_code_answer(correct_answer)
+
+    if user_norm == correct_norm:
+        return True
+
+    if len(user_norm) >= 6 and (user_norm in correct_norm or correct_norm in user_norm):
+        return True
+
+    user_keys = set(_key_tokens(user_norm))
+    correct_keys = set(_key_tokens(correct_norm))
+
+    if not correct_keys:
+        return False
+
+    overlap = len(user_keys & correct_keys)
+    ratio = overlap / len(correct_keys)
+    if overlap >= 2 and ratio >= 0.5:
+        return True
+
+    if len(correct_keys) == 1 and overlap == 1:
+        return True
+
+    return False
+
+
+def ask_step_code(step: StepQuestion, scenario_prompt: str) -> tuple[bool, int, bool]:
+    hint_count = 0
+    used_hint_once = False
+    correct_answer = step.choices[step.answer_index]
+
+    print(color_text("\n─" * 0))
+    print_rule("─", MAGENTA)
+    print(color_text("Problem", BOLD, MAGENTA))
+    print(color_text(scenario_prompt, BLUE))
+    print_rule("─", DIM)
+    print(color_text(step.prompt, BOLD))
+    clue_words = _key_tokens(correct_answer)[:4]
+    clue_text = ", ".join(clue_words) if clue_words else step.hint
+    print(color_text(f"Clue in question: {step.hint}", DIM, CYAN))
+    print(color_text(f"Keyword clue: {clue_text}", DIM, CYAN))
+    print()
+
+    while True:
+        answer = input("Write your code answer (H for hint, Q to quit/save): ").strip()
+        upper = answer.upper()
+        if upper == "Q":
+            return False, hint_count, True
+        if upper == "H":
+            print(f"\nHint: {step.hint}")
+            print(f"Keyword clue: {clue_text}\n")
+            if not used_hint_once:
+                hint_count += 1
+                used_hint_once = True
+            continue
+        if not answer:
+            print("\nPlease type an answer, H, or Q.\n")
+            continue
+
+        is_correct = _code_answer_matches(answer, correct_answer)
+        if is_correct:
+            print(f"\n{GREEN}Correct.{RESET}")
+        else:
+            print(
+                f"\n{YELLOW}Incorrect. Expected answer:{RESET} {correct_answer}"
+            )
+        print(f"Why: {step.explanation}\n")
+        return is_correct, hint_count, False
 
 
 # -------------------------------------------------------------------
@@ -1545,6 +1685,7 @@ def play_scenario(
     state: Dict,
     category_stats: Dict[str, Dict[str, int]],
     start_step: int = 0,
+    answer_handler: Callable[[StepQuestion, str], tuple[bool, int, bool]] = ask_step,
 ) -> tuple[bool, int]:
     print_banner(f"INTERVIEW SCENARIO: {scenario.title}", f"Category: {scenario.category}")
     print_panel(
@@ -1566,7 +1707,7 @@ def play_scenario(
 
     for step_index in range(start_step, len(scenario.steps)):
         step = scenario.steps[step_index]
-        is_correct, hints_used, wants_quit = ask_step(step, scenario.prompt)
+        is_correct, hints_used, wants_quit = answer_handler(step, scenario.prompt)
         if wants_quit:
             return False, step_index
 
@@ -3423,7 +3564,7 @@ def _practice_searching_hard(language: str) -> List[StepQuestion]:
 # ------------------------------------------------------------------
 # PRACTICE TOPIC DISPATCHER
 # ------------------------------------------------------------------
-PRACTICE_QUESTION_BUILDERS: Dict[str, Dict[str, Dict]] = {
+PRACTICE_QUESTION_BUILDERS: Dict[str, Dict[str, Callable[[str], List[StepQuestion]]]] = {
     "for_loops":      {"easy": _practice_for_loops_easy,      "medium": _practice_for_loops_medium,      "hard": _practice_for_loops_hard},
     "nested_loops":   {"easy": _practice_nested_loops_easy,   "medium": _practice_nested_loops_medium,   "hard": _practice_nested_loops_hard},
     "while_loops":    {"easy": _practice_while_loops_easy,    "medium": _practice_while_loops_medium,    "hard": _practice_while_loops_hard},
@@ -3540,6 +3681,89 @@ def play_practice_mode() -> None:
             return
 
 
+def play_code_mode() -> None:
+    print_banner("CODE WRITE MODE", "Type each code answer from scratch")
+
+    name = ask_player_name()
+    language = ask_language()
+    level = ask_level()
+
+    while True:
+        display_name, topic_key = ask_practice_topic()
+
+        builders = PRACTICE_QUESTION_BUILDERS.get(topic_key, {})
+        builder = builders.get(level)
+        if builder is None:
+            print(color_text("No questions available for that combination yet.", YELLOW))
+            continue
+
+        questions = builder(language)
+        random.shuffle(questions)
+        questions = questions[:5]
+
+        state = {
+            "score": 0,
+            "possible": 0,
+            "bonus": 0,
+            "streak": 0,
+            "hearts": STARTING_HEARTS,
+            "hints_used": 0,
+        }
+        category_stats: Dict[str, Dict[str, int]] = {}
+
+        lang_display = LANGUAGE_DISPLAY.get(language, language)
+        scenario = Scenario(
+            level=level,
+            category=display_name,
+            title=f"Code Write: {display_name} ({lang_display})",
+            prompt=f"Code write drill — {display_name} — {level.title()} — {lang_display}",
+            steps=questions,
+        )
+
+        print_banner(f"Code Write: {display_name}", f"Level: {level.title()}  |  Language: {lang_display}")
+        completed, _ = play_scenario(scenario, state, category_stats, answer_handler=ask_step_code)
+
+        score = state["score"]
+        possible = state["possible"]
+        percent = round((score / possible) * 100, 1) if possible else 0
+
+        print_panel(
+            "Code Write Session Summary",
+            [
+                f"Topic:    {color_text(display_name, BOLD, CYAN)}",
+                f"Level:    {level_badge(level)}",
+                f"Language: {color_text(lang_display, BOLD, MAGENTA)}",
+                f"Score:    {format_score(score, possible)}  ({color_text(f'{percent}%', BOLD, GREEN if percent >= 80 else YELLOW)})",
+                f"Hints:    {state['hints_used']}",
+                f"Hearts:   {hearts_text(state['hearts'])}",
+            ],
+            accent=GREEN,
+        )
+
+        if percent == 100:
+            print(color_text("Perfect score! Your code writing is sharp.", BOLD, GREEN))
+        elif percent >= 80:
+            print(color_text("Great work! You are writing strong interview answers.", BOLD, CYAN))
+        elif percent >= 60:
+            print(color_text("Good effort. Keep tightening your code syntax and recall.", BOLD, YELLOW))
+        else:
+            print(color_text("Keep practicing. Writing each answer builds stronger retention.", BOLD, RED))
+
+        leaderboard = update_leaderboard(
+            f"{name} [CodeWrite:{display_name}]",
+            score,
+            possible,
+            level,
+            state["hints_used"],
+        )
+        print_leaderboard(leaderboard)
+
+        again = input(color_text("\nPractice another code-write topic? (y/n): ", BOLD)).strip().lower()
+        if again != "y":
+            print(color_text("Returning to main menu.", BOLD, BLUE))
+            return
+
+
 # ===================================================================
 # MAIN MENU
 # ===================================================================
@@ -3552,25 +3776,28 @@ def main_menu() -> None:
             [
                 f"  {color_text('1.', BOLD, CYAN)} Classic Mode  — 10 random interview scenarios",
                 f"  {color_text('2.', BOLD, CYAN)} Practice Mode — Choose a topic, drill 5 questions",
-                f"  {color_text('3.', BOLD, CYAN)} View Leaderboard",
-                f"  {color_text('4.', BOLD, RED)}  Quit",
+                f"  {color_text('3.', BOLD, CYAN)} Code Write Mode — Type each answer (no multiple choice)",
+                f"  {color_text('4.', BOLD, CYAN)} View Leaderboard",
+                f"  {color_text('5.', BOLD, RED)}  Quit",
             ],
             accent=MAGENTA,
         )
-        choice = input(color_text("Enter 1, 2, 3, or 4: ", BOLD)).strip()
+        choice = input(color_text("Enter 1, 2, 3, 4, or 5: ", BOLD)).strip()
         if choice == "1":
             play_game()
         elif choice == "2":
             play_practice_mode()
         elif choice == "3":
+            play_code_mode()
+        elif choice == "4":
             entries = load_leaderboard()
             print_leaderboard(entries)
             input(color_text("\nPress Enter to continue...", DIM))
-        elif choice == "4":
+        elif choice == "5":
             print(color_text("Goodbye!", BOLD, BLUE))
             return
         else:
-            print(color_text("Please enter 1, 2, 3, or 4.", YELLOW))
+            print(color_text("Please enter 1, 2, 3, 4, or 5.", YELLOW))
 
 
 if __name__ == "__main__":
