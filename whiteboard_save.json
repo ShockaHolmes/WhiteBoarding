@@ -1,33 +1,33 @@
 {
-  "name": "Shocka Holmes",
+  "name": "q",
   "level": "easy",
   "language": "python",
   "state": {
-    "score": 45,
-    "possible": 50,
-    "bonus": 5,
-    "streak": 3,
-    "hearts": 11,
-    "hints_used": 1
+    "score": 0,
+    "possible": 0,
+    "bonus": 0,
+    "streak": 0,
+    "hearts": 12,
+    "hints_used": 0
   },
   "category_stats": {
-    "Math": {
-      "earned": 40,
-      "possible": 50
+    "Strings": {
+      "earned": 0,
+      "possible": 0
     }
   },
   "selected_indices": [
-    0,
-    24,
-    87,
-    91,
-    98,
-    68,
-    21,
-    22,
-    1,
-    107
+    50,
+    37,
+    60,
+    69,
+    49,
+    101,
+    57,
+    65,
+    40,
+    41
   ],
-  "scenario_position": 1,
+  "scenario_position": 0,
   "step_position": 0
 }

@@ -210,11 +210,23 @@ def print_leaderboard(entries: List[Dict]) -> None:
 
 
 def ask_level() -> str:
+    LEVEL_MAP = {"1": "easy", "2": "medium", "3": "hard"}
     while True:
-        level = input("Choose a level (easy / medium / hard): ").strip().lower()
-        if level in {"easy", "medium", "hard"}:
-            return level
-        print("Please type easy, medium, or hard.")
+        print_panel(
+            "Choose a Level",
+            [
+                f"  {color_text('1.', BOLD, GREEN)} Easy",
+                f"  {color_text('2.', BOLD, YELLOW)} Medium",
+                f"  {color_text('3.', BOLD, RED)} Hard",
+            ],
+            accent=CYAN,
+        )
+        raw = input(color_text("Enter 1, 2, 3  or  easy/medium/hard: ", BOLD)).strip().lower()
+        if raw in LEVEL_MAP:
+            return LEVEL_MAP[raw]
+        if raw in {"easy", "medium", "hard"}:
+            return raw
+        print(color_text("Please enter 1, 2, 3, easy, medium, or hard.", YELLOW))
 
 
 def ask_language() -> str:
@@ -465,9 +477,10 @@ def localize_step(step: StepQuestion, language: str) -> StepQuestion:
 def localize_scenario(scenario: Scenario, language: str) -> Scenario:
     if language == "python":
         return scenario
+    category_label = f"{LANGUAGE_DISPLAY[language]} {scenario.category}"
     return Scenario(
         level=scenario.level,
-        category=scenario.category,
+        category=category_label,
         title=f"{scenario.title} ({LANGUAGE_DISPLAY[language]})",
         prompt=localize_text(scenario.prompt, language),
         steps=[localize_step(step, language) for step in scenario.steps],
@@ -752,6 +765,37 @@ def generate_easy_pool() -> List[Scenario]:
     greet_names = [f"greet_user_{i}" for i in range(1, 26)]
     for name in greet_names:
         pool.append(build_easy_greet(name))
+
+    return pool
+
+
+def generate_easy_pool_for_language(language: str) -> List[Scenario]:
+    if language == "python":
+        return generate_easy_pool()
+
+    pool = []
+    suffix = "java" if language == "java" else "cs"
+    delta_offset = 100 if language == "java" else 200
+
+    add_names = [f"{suffix}_add_bonus_{i}" for i in range(1, 26)]
+    for i, name in enumerate(add_names, start=1):
+        pool.append(localize_scenario(build_easy_add(name, i + delta_offset), language))
+
+    even_names = [f"{suffix}_is_even_{i}" for i in range(1, 26)]
+    for name in even_names:
+        pool.append(localize_scenario(build_easy_even(name), language))
+
+    first_names = [f"{suffix}_first_char_{i}" for i in range(1, 26)]
+    for name in first_names:
+        pool.append(localize_scenario(build_easy_first_char(name), language))
+
+    len_names = [f"{suffix}_count_items_{i}" for i in range(1, 26)]
+    for name in len_names:
+        pool.append(localize_scenario(build_easy_list_len(name), language))
+
+    greet_names = [f"{suffix}_greet_user_{i}" for i in range(1, 26)]
+    for name in greet_names:
+        pool.append(localize_scenario(build_easy_greet(name), language))
 
     return pool
 
@@ -1043,12 +1087,29 @@ def build_medium_reverse_string(func_name: str) -> Scenario:
 def generate_medium_pool() -> List[Scenario]:
     pool = []
 
-    for i in range(1, 25):
+    for i in range(1, 26):
         pool.append(build_medium_count_vowels(f"count_vowels_{i}"))
         pool.append(build_medium_sum_evens(f"sum_evens_{i}"))
         pool.append(build_medium_find_max(f"find_max_{i}"))
         pool.append(build_medium_count_target(f"count_target_{i}"))
         pool.append(build_medium_reverse_string(f"reverse_text_{i}"))
+
+    return pool
+
+
+def generate_medium_pool_for_language(language: str) -> List[Scenario]:
+    if language == "python":
+        return generate_medium_pool()
+
+    pool = []
+    suffix = "java" if language == "java" else "cs"
+
+    for i in range(1, 26):
+        pool.append(localize_scenario(build_medium_count_vowels(f"{suffix}_count_vowels_{i}"), language))
+        pool.append(localize_scenario(build_medium_sum_evens(f"{suffix}_sum_evens_{i}"), language))
+        pool.append(localize_scenario(build_medium_find_max(f"{suffix}_find_max_{i}"), language))
+        pool.append(localize_scenario(build_medium_count_target(f"{suffix}_count_target_{i}"), language))
+        pool.append(localize_scenario(build_medium_reverse_string(f"{suffix}_reverse_text_{i}"), language))
 
     return pool
 
@@ -1443,7 +1504,7 @@ def build_hard_has_duplicate(func_name: str) -> Scenario:
 def generate_hard_pool() -> List[Scenario]:
     pool = []
 
-    for i in range(1, 25):
+    for i in range(1, 26):
         pool.append(build_hard_class_counter(f"Counter{i}"))
         pool.append(build_hard_two_sum(f"two_sum_{i}"))
         pool.append(build_hard_binary_search(f"binary_search_{i}"))
@@ -1453,17 +1514,30 @@ def generate_hard_pool() -> List[Scenario]:
     return pool
 
 
+def generate_hard_pool_for_language(language: str) -> List[Scenario]:
+    if language == "python":
+        return generate_hard_pool()
+
+    pool = []
+    suffix = "java" if language == "java" else "cs"
+    class_prefix = "JavaCounter" if language == "java" else "CsCounter"
+
+    for i in range(1, 26):
+        pool.append(localize_scenario(build_hard_class_counter(f"{class_prefix}{i}"), language))
+        pool.append(localize_scenario(build_hard_two_sum(f"{suffix}_two_sum_{i}"), language))
+        pool.append(localize_scenario(build_hard_binary_search(f"{suffix}_binary_search_{i}"), language))
+        pool.append(localize_scenario(build_hard_valid_parentheses(f"{suffix}_is_balanced_{i}"), language))
+        pool.append(localize_scenario(build_hard_has_duplicate(f"{suffix}_has_duplicate_{i}"), language))
+
+    return pool
+
+
 def get_pool(level: str, language: str = "python") -> List[Scenario]:
     if level == "easy":
-        base = generate_easy_pool()
+        return generate_easy_pool_for_language(language)
     elif level == "medium":
-        base = generate_medium_pool()
-    else:
-        base = generate_hard_pool()
-
-    if language == "python":
-        return base
-    return [localize_scenario(scenario, language) for scenario in base]
+        return generate_medium_pool_for_language(language)
+    return generate_hard_pool_for_language(language)
 
 
 def play_scenario(
@@ -1683,5 +1757,1821 @@ def play_game() -> None:
         return
 
 
+# ===================================================================
+# PRACTICE MODE
+# ===================================================================
+
+PRACTICE_TOPICS = {
+    "For Loops": "for_loops",
+    "Nested Loops": "nested_loops",
+    "While Loops": "while_loops",
+    "If / Else (Conditionals)": "conditionals",
+    "Functions": "functions",
+    "Strings": "strings",
+    "Lists / Arrays": "lists",
+    "Dictionaries / Hash Maps": "dicts",
+    "Sets": "sets",
+    "Recursion": "recursion",
+    "OOP / Classes": "oop",
+    "Sorting": "sorting",
+    "Searching": "searching",
+}
+
+
+def _practice_q(prompt: str, correct: str, wrongs: List[str], hint: str, explanation: str) -> StepQuestion:
+    return make_step(prompt, correct, wrongs, hint, explanation)
+
+
+# ------------------------------------------------------------------
+# FOR LOOPS
+# ------------------------------------------------------------------
+def _practice_for_loops_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which line correctly iterates over every item in a list called `items`?",
+            "for item in items:",
+            ["for item in range(items):", "while item in items:", "for items in item:"],
+            "You want to visit each element of the list directly.",
+            "`for item in items:` gives you each element one at a time.",
+        ),
+        _practice_q(
+            "What does `for i in range(5):` produce for i on each iteration?",
+            "0, 1, 2, 3, 4",
+            ["1, 2, 3, 4, 5", "0, 1, 2, 3, 4, 5", "1, 2, 3, 4"],
+            "range(5) starts at 0 and stops before 5.",
+            "range(n) produces values 0 through n-1.",
+        ),
+        _practice_q(
+            "How do you print each number from 1 to 3 using a for loop?",
+            "for i in range(1, 4): print(i)",
+            ["for i in range(3): print(i)", "for i in range(1, 3): print(i)", "for i in [1,2,3,4]: print(i)"],
+            "range(start, stop) stops before `stop`.",
+            "range(1, 4) gives 1, 2, 3.",
+        ),
+        _practice_q(
+            "What is the output of: `for x in [2, 4, 6]: print(x * 2)`?",
+            "4  8  12",
+            ["2  4  6", "4  8  6", "2  8  12"],
+            "Multiply each item by 2.",
+            "2*2=4, 4*2=8, 6*2=12.",
+        ),
+        _practice_q(
+            "How do you sum all numbers in a list `nums` using a for loop?",
+            "total = 0\nfor n in nums: total += n",
+            ["for n in nums: total = n", "total = nums\nfor n in nums: total + n", "for n in range(nums): total += n"],
+            "Initialize a counter to 0 before the loop.",
+            "Start at 0 and add each element inside the loop.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_for_loops_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which line iterates over a list with both index and value?",
+            "for i, val in enumerate(items):",
+            ["for i, val in range(items):", "for i in items:", "for val, i in items:"],
+            "enumerate() returns (index, value) pairs.",
+            "enumerate gives the index alongside the value.",
+        ),
+        _practice_q(
+            "How do you loop over a list in reverse order?",
+            "for item in reversed(items):",
+            ["for item in items[::-1]:", "for item in items.reverse():", "for item in range(items, 0):"],
+            "reversed() returns an iterator that goes backward.",
+            "reversed(items) iterates in reverse without copying.",
+        ),
+        _practice_q(
+            "What does `for i in range(0, 10, 2):` produce?",
+            "0, 2, 4, 6, 8",
+            ["0, 2, 4, 6, 8, 10", "1, 3, 5, 7, 9", "0, 2, 4, 6"],
+            "The third argument to range() is the step.",
+            "range(0, 10, 2) counts by 2s up to (not including) 10.",
+        ),
+        _practice_q(
+            "Which construct loops over two lists of equal length simultaneously?",
+            "for a, b in zip(list1, list2):",
+            ["for a, b in list1, list2:", "for (a, b) in range(list1, list2):", "for a in list1 and b in list2:"],
+            "zip() pairs elements from multiple iterables.",
+            "zip(list1, list2) yields matching pairs.",
+        ),
+        _practice_q(
+            "You want to build a list of squares for 1-5 using a list comprehension. Which is correct?",
+            "[x**2 for x in range(1, 6)]",
+            ["[x^2 for x in range(1, 6)]", "[x**2 for x in range(6)]", "[x*x for x in range(5)]"],
+            "range(1, 6) includes 5; ** is the exponent operator.",
+            "[x**2 for x in range(1, 6)] gives [1, 4, 9, 16, 25].",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_for_loops_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which nested for loop correctly builds all pairs from two lists?",
+            "for a in list1:\n    for b in list2: pairs.append((a, b))",
+            ["for a, b in list1, list2: pairs.append((a, b))", "for a in list1 and b in list2: pairs.append((a,b))", "for a, b in zip(list1, list2): pairs.append(a, b)"],
+            "Two separate for loops, one inside the other.",
+            "Nested loops generate every combination of elements.",
+        ),
+        _practice_q(
+            "What is the time complexity of two nested for loops each iterating n times?",
+            "O(n²)",
+            ["O(n)", "O(2n)", "O(log n)"],
+            "The inner loop runs n times for each of the n outer iterations.",
+            "n * n = n², so the complexity is O(n²).",
+        ),
+        _practice_q(
+            "Which code correctly counts the number of pairs (i, j) where nums[i] + nums[j] == target using brute force?",
+            "for i in range(len(nums)):\n    for j in range(i+1, len(nums)):\n        if nums[i]+nums[j]==target: count+=1",
+            ["for i, j in enumerate(nums): if nums[i]+nums[j]==target: count+=1", "for i in range(len(nums)): for j in range(len(nums)): if i!=j and nums[i]+nums[j]==target: count+=1", "for i in range(len(nums)): for j in range(i, len(nums)): if nums[i]+nums[j]==target: count+=1"],
+            "Start j from i+1 to avoid counting the same pair twice.",
+            "j starts at i+1 to ensure each unordered pair is counted once.",
+        ),
+        _practice_q(
+            "Which `break` and `continue` behavior is correct?",
+            "`break` exits the loop; `continue` skips to the next iteration",
+            ["`break` skips one iteration; `continue` exits the loop", "Both exit the loop", "Both skip one iteration"],
+            "break stops the loop entirely; continue goes back to the top.",
+            "break exits; continue restarts the loop for the next item.",
+        ),
+        _practice_q(
+            "What does `[n for n in range(20) if n % 3 == 0]` produce?",
+            "[0, 3, 6, 9, 12, 15, 18]",
+            ["[3, 6, 9, 12, 15, 18]", "[0, 3, 6, 9, 12, 15]", "[3, 6, 9, 12, 15, 18, 21]"],
+            "range(20) goes 0-19; filter keeps multiples of 3.",
+            "0 is a multiple of 3 (0%3==0) and range stops before 20.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# NESTED LOOPS
+# ------------------------------------------------------------------
+def _practice_nested_loops_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is a nested loop?",
+            "A loop that contains another loop in its body",
+            ["A loop that skips iterations", "A loop that runs only once", "A loop inside a function call"],
+            "Think about how many loops are involved.",
+            "A nested loop is simply a loop inside another loop.",
+        ),
+        _practice_q(
+            "How many times does the inner `print` run?\n\nfor i in range(3):\n    for j in range(2):\n        print(i, j)",
+            "6",
+            ["3", "2", "5"],
+            "Outer runs 3 times; inner runs 2 times each.",
+            "3 × 2 = 6 total iterations.",
+        ),
+        _practice_q(
+            "Which code prints a 3×3 grid of stars?",
+            "for r in range(3):\n    for c in range(3): print('*', end=' ')\n    print()",
+            ["for r in range(3): print('***')", "for r, c in range(3): print('*')", "for r in range(3): for c in range(3): print('*')"],
+            "The inner loop handles columns; a print() after resets the line.",
+            "An inner loop fills a row; print() without args moves to the next line.",
+        ),
+        _practice_q(
+            "What is the value of `total` after:\n\ntotal = 0\nfor i in range(3):\n    for j in range(3): total += 1",
+            "9",
+            ["6", "3", "12"],
+            "Count every (i, j) combination.",
+            "3 × 3 = 9 increments.",
+        ),
+        _practice_q(
+            "Which statement is true about breaking out of nested loops in Python?",
+            "`break` only exits the innermost loop",
+            ["`break` exits all loops at once", "`break` only exits the outer loop", "`continue` exits all loops"],
+            "In Python, break works on one loop level at a time.",
+            "`break` only exits the loop it is directly inside.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_nested_loops_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which code flattens a 2-D list `matrix` into a 1-D list?",
+            "flat = []\nfor row in matrix:\n    for val in row: flat.append(val)",
+            ["flat = [val for val in matrix]", "flat = matrix.flatten()", "for row, val in matrix: flat.append(val)"],
+            "You need to loop over rows, then loop over values in each row.",
+            "An inner loop extracts each element from each row.",
+        ),
+        _practice_q(
+            "What is the time complexity of checking all unique pairs in a list of n elements?",
+            "O(n²)",
+            ["O(n)", "O(n log n)", "O(1)"],
+            "Both loops iterate approximately n times.",
+            "Two nested loops over n elements gives O(n²).",
+        ),
+        _practice_q(
+            "Which code correctly prints the upper triangle of a 4×4 grid (j >= i)?",
+            "for i in range(4):\n    for j in range(i, 4): print(i, j)",
+            ["for i in range(4): for j in range(4): print(i, j)", "for i in range(4): for j in range(0, i): print(i, j)", "for i, j in range(4): print(i, j)"],
+            "The inner range should start at i so j is never less than i.",
+            "Starting j at i skips the lower triangle.",
+        ),
+        _practice_q(
+            "What does this print?\n\nfor i in range(1, 4):\n    print(i * '*')",
+            "*\n**\n***",
+            ["***\n***\n***", "1\n2\n3", "*\n*\n*"],
+            "Multiplying a string repeats it.",
+            "'*' * 1 = '*', '*' * 2 = '**', '*' * 3 = '***'.",
+        ),
+        _practice_q(
+            "Which code searches a 2-D list for a target value and returns its (row, col)?",
+            "for r, row in enumerate(matrix):\n    for c, val in enumerate(row):\n        if val == target: return r, c",
+            ["for r in matrix: for c in r: if c == target: return r, c", "for r, c in matrix: if matrix[r][c] == target: return r, c", "for r in range(len(matrix)): if target in matrix[r]: return r"],
+            "Use enumerate to get both indices and values.",
+            "enumerate on the outer loop gives the row index; enumerate on the inner loop gives the column index.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_nested_loops_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which approach reduces an O(n²) pair-sum search to O(n)?",
+            "Use a hash map to store seen values and look up the complement",
+            ["Sort the list first then use two pointers", "Use a nested loop with early break", "Use recursion"],
+            "A hash map allows O(1) lookups.",
+            "Storing seen values in a dict lets you find the complement in constant time.",
+        ),
+        _practice_q(
+            "How do you implement bubble sort using nested loops?",
+            "for i in range(n):\n    for j in range(n-i-1):\n        if arr[j] > arr[j+1]: arr[j], arr[j+1] = arr[j+1], arr[j]",
+            ["for i in range(n): for j in range(n): if arr[i] > arr[j]: swap", "for i in range(n): for j in range(i): if arr[j] > arr[j-1]: swap", "for i, j in enumerate(arr): if arr[i] > arr[j]: swap"],
+            "The inner range shrinks each pass because the last i elements are already sorted.",
+            "n-i-1 ensures we don't re-compare already-sorted elements.",
+        ),
+        _practice_q(
+            "What is the output of:\n\nfor i in range(3):\n    for j in range(3):\n        if i == j: continue\n        print(i, j)",
+            "Prints all (i,j) pairs where i ≠ j",
+            ["Prints nothing", "Prints only diagonal (i==j) pairs", "Prints all 9 pairs"],
+            "continue skips the current iteration when i == j.",
+            "The diagonal pairs are skipped; all off-diagonal pairs print.",
+        ),
+        _practice_q(
+            "Which code counts the number of 'islands' in a binary 2-D grid (connected 1s) without recursion?",
+            "Use nested loops to find each '1', then BFS/DFS with a queue to mark its island",
+            ["Use a single for loop over all cells", "Use nested loops and count each '1' independently", "Sort the grid and count runs of 1s"],
+            "Marking visited cells prevents recounting the same island.",
+            "BFS/DFS from each unvisited '1' explores and marks a whole island.",
+        ),
+        _practice_q(
+            "What is the space complexity of generating all n² pairs from a list into a new list?",
+            "O(n²)",
+            ["O(n)", "O(1)", "O(log n)"],
+            "Each pair is stored explicitly.",
+            "Storing n² pairs requires O(n²) extra space.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# WHILE LOOPS
+# ------------------------------------------------------------------
+def _practice_while_loops_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which is a valid while loop that prints 1, 2, 3?",
+            "i = 1\nwhile i <= 3:\n    print(i)\n    i += 1",
+            ["while 1 <= 3: print(i)", "while i in range(3): print(i)", "i = 1\nwhile i < 3: print(i); i += 1"],
+            "You need a counter that increments and a condition that becomes False.",
+            "i starts at 1, the condition is i <= 3, and i increases each iteration.",
+        ),
+        _practice_q(
+            "What causes an infinite while loop?",
+            "The condition never becomes False",
+            ["The loop body runs too fast", "The variable is an integer", "Using while instead of for"],
+            "A while loop continues as long as the condition is True.",
+            "If the condition stays True forever, the loop never stops.",
+        ),
+        _practice_q(
+            "What does `while True: break` do?",
+            "Runs the body once then exits",
+            ["Loops forever", "Never runs", "Runs the body twice"],
+            "break exits the loop immediately the first time it is reached.",
+            "The body executes once; break stops the loop.",
+        ),
+        _practice_q(
+            "How do you read user input until they type 'quit' using a while loop?",
+            "while True:\n    text = input()\n    if text == 'quit': break",
+            ["while input() != 'quit': pass", "while text = input(): if text == 'quit': stop", "for text in input(): if text == 'quit': break"],
+            "Loop forever and use break to exit on the sentinel value.",
+            "An infinite loop with a break is a common input-validation pattern.",
+        ),
+        _practice_q(
+            "What is the value of `x` after:\n\nx = 10\nwhile x > 0: x -= 3",
+            "-2",
+            ["0", "1", "-3"],
+            "Subtract 3 repeatedly from 10 until negative: 10→7→4→1→-2.",
+            "The loop stops when x <= 0, and the last value is -2.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_while_loops_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which loop counts down from n to 1 and then prints 'Done'?",
+            "while n > 0:\n    print(n)\n    n -= 1\nprint('Done')",
+            ["while n: print(n)", "while n >= 0: print(n); n -= 1", "for n in range(n, 0): print(n)"],
+            "'Done' should print after the loop finishes.",
+            "The condition n > 0 stops before 0; 'Done' appears after the loop.",
+        ),
+        _practice_q(
+            "Which code uses a while loop to find the first power of 2 greater than 1000?",
+            "p = 1\nwhile p <= 1000: p *= 2",
+            ["p = 2\nwhile p < 1000: p += 2", "p = 1\nwhile p > 1000: p *= 2", "for p in range(1000): p *= 2"],
+            "Double p each iteration until it exceeds 1000.",
+            "Multiplying by 2 each step gives powers of 2; the loop stops when p > 1000.",
+        ),
+        _practice_q(
+            "When should you prefer a while loop over a for loop?",
+            "When you don't know the exact number of iterations in advance",
+            ["When you always know how many iterations are needed", "When looping over a list", "When performance is critical"],
+            "A for loop is better when iteration count is known.",
+            "While loops shine for open-ended repetition (e.g., user input, game loops).",
+        ),
+        _practice_q(
+            "Which code implements a simple retry loop (retry up to 3 times)?",
+            "attempts = 0\nwhile attempts < 3:\n    if try_action(): break\n    attempts += 1",
+            ["for attempts in range(3): if not try_action(): break", "while True: if try_action(): pass", "attempts = 3\nwhile attempts > 0: try_action()"],
+            "You want to try at most 3 times and stop early on success.",
+            "Count attempts and break on success; stop when attempts hits 3.",
+        ),
+        _practice_q(
+            "What is the output of:\n\nx = 1\nwhile x < 100:\n    x *= 2\nprint(x)",
+            "128",
+            ["64", "100", "256"],
+            "Double x starting from 1: 1,2,4,8,16,32,64,128.",
+            "x doubles until it exceeds 100, reaching 128.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_while_loops_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which code implements binary search using a while loop?",
+            "left, right = 0, len(nums)-1\nwhile left <= right:\n    mid = (left+right)//2\n    if nums[mid]==target: return mid\n    elif nums[mid]<target: left=mid+1\n    else: right=mid-1",
+            ["while left < right: mid=left+right//2", "while left != right: mid=(left+right)/2", "for mid in range(left, right): if nums[mid]==target: return mid"],
+            "The loop condition should be left <= right; use integer division for mid.",
+            "left <= right handles single-element sublists; // gives an integer index.",
+        ),
+        _practice_q(
+            "What is a common bug when writing a while loop?",
+            "Forgetting to update the loop variable, causing an infinite loop",
+            ["Using break inside the loop", "Initializing the counter before the loop", "Using <= instead of <"],
+            "If nothing changes the condition, the loop runs forever.",
+            "Always ensure the loop makes progress toward the exit condition.",
+        ),
+        _practice_q(
+            "Which code uses a while loop to reverse a linked list (conceptually)?",
+            "prev = None\ncurr = head\nwhile curr:\n    nxt = curr.next\n    curr.next = prev\n    prev = curr\n    curr = nxt",
+            ["while curr: curr = curr.next", "while head: head.next = head", "prev = head\nwhile prev: prev = prev.next"],
+            "Save next, reverse the pointer, move forward.",
+            "You reverse each pointer one node at a time using three variables.",
+        ),
+        _practice_q(
+            "Which condition correctly implements a two-pointer while loop that converges from both ends?",
+            "while left < right:",
+            ["while left == right:", "while left <= right:", "while left != 0:"],
+            "Pointers start at opposite ends and move toward each other.",
+            "left < right stops exactly when the pointers meet or cross.",
+        ),
+        _practice_q(
+            "What does `do-while` semantics mean, and how do you mimic it in Python?",
+            "Run the body at least once; use `while True:` with a `break` at the end of the body",
+            ["Use `for` with range(1)", "Use `while False:`", "Python has a built-in do-while keyword"],
+            "A do-while always executes the body before checking the condition.",
+            "while True with a conditional break at the bottom mimics do-while.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# CONDITIONALS
+# ------------------------------------------------------------------
+def _practice_conditionals_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which line correctly checks if x equals 10?",
+            "if x == 10:",
+            ["if x = 10:", "if x is 10:", "if x := 10:"],
+            "Use == for comparison, not =.",
+            "= is assignment; == is comparison.",
+        ),
+        _practice_q(
+            "What keyword introduces an alternative branch if the first condition is False?",
+            "else",
+            ["elif", "otherwise", "then"],
+            "The two-branch construct is if/else.",
+            "`else` provides the fallback branch.",
+        ),
+        _practice_q(
+            "Which correctly prints 'positive', 'negative', or 'zero' for variable n?",
+            "if n > 0: print('positive')\nelif n < 0: print('negative')\nelse: print('zero')",
+            ["if n > 0: print('positive')\nif n < 0: print('negative')\nif n == 0: print('zero')", "if n > 0: print('positive')\nelse: print('negative')", "if n > 0 else n < 0: print('zero')"],
+            "Use elif to chain conditions so only one branch runs.",
+            "elif avoids re-checking when a previous condition already matched.",
+        ),
+        _practice_q(
+            "How do you check if a number n is between 1 and 10 inclusive?",
+            "if 1 <= n <= 10:",
+            ["if n > 1 and n < 10:", "if n >= 1 or n <= 10:", "if 1 < n < 10:"],
+            "Both ends should be included (<=, <=).",
+            "Python allows chained comparisons: 1 <= n <= 10.",
+        ),
+        _practice_q(
+            "Which operator means 'both conditions must be True'?",
+            "and",
+            ["or", "not", "&"],
+            "Think about logical conjunction.",
+            "`and` requires both sides to be True.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_conditionals_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is a ternary (one-line conditional) expression?",
+            "value_if_true if condition else value_if_false",
+            ["if condition: value_if_true", "condition ? value_if_true : value_if_false", "value_if_true unless condition"],
+            "Python's ternary puts the condition in the middle.",
+            "Python syntax: `x if cond else y`.",
+        ),
+        _practice_q(
+            "Which code assigns 'Adult' if age >= 18, else 'Minor'?",
+            "label = 'Adult' if age >= 18 else 'Minor'",
+            ["label = if age >= 18: 'Adult' else 'Minor'", "label = 'Adult' or 'Minor'", "if age >= 18: label = 'Adult'\nelif: label = 'Minor'"],
+            "Use Python's ternary expression.",
+            "The ternary form is: value if condition else other.",
+        ),
+        _practice_q(
+            "How do you check if a value is in a list using a conditional?",
+            "if value in my_list:",
+            ["if value == my_list:", "if value is my_list:", "if value not not in my_list:"],
+            "Python's `in` operator tests membership.",
+            "`in` checks whether value exists in my_list.",
+        ),
+        _practice_q(
+            "What does `not True` evaluate to?",
+            "False",
+            ["True", "None", "0"],
+            "not inverts the boolean.",
+            "`not True` is False.",
+        ),
+        _practice_q(
+            "Which correctly short-circuits to avoid a ZeroDivisionError?",
+            "if b != 0 and a / b > 1:",
+            ["if a / b > 1 and b != 0:", "if b != 0 or a / b > 1:", "if not b == 0: a / b > 1"],
+            "Check the safe condition first when using `and`.",
+            "`and` short-circuits: if the first part is False, the second isn't evaluated.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_conditionals_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which pattern correctly handles multiple exclusive cases efficiently?",
+            "Use elif chains so only one branch executes",
+            ["Use separate if statements for each case", "Use nested if statements", "Use a while loop for each case"],
+            "elif chains skip remaining checks after the first match.",
+            "elif is more efficient than multiple independent ifs for exclusive conditions.",
+        ),
+        _practice_q(
+            "What does `x = a if a is not None else b` do?",
+            "Assigns a to x if a is not None, otherwise assigns b",
+            ["Always assigns b", "Raises an error if a is None", "Assigns None to x"],
+            "is not None checks for None specifically.",
+            "This is a null-coalescing pattern in Python.",
+        ),
+        _practice_q(
+            "Which code uses a dictionary to replace a long if/elif chain for action dispatch?",
+            "actions = {'add': add_fn, 'remove': remove_fn}\nactions[key]()",
+            ["if key == 'add': add_fn()\nelif key == 'remove': remove_fn()", "actions = [add_fn, remove_fn]\nactions[0]()", "dispatch = (add_fn, remove_fn)\ndispatch[key]()"],
+            "A dict maps keys to callable functions.",
+            "A dispatch dict replaces if/elif chains and is more extensible.",
+        ),
+        _practice_q(
+            "What is 'guard clause' style coding?",
+            "Return or raise early for invalid cases instead of wrapping logic in else",
+            ["Only using if without else", "Using try/except instead of if", "Nesting all logic inside a single if"],
+            "Guard clauses reduce nesting by handling edge cases early.",
+            "Early returns flatten deeply nested conditional code.",
+        ),
+        _practice_q(
+            "What is the result of `True and False or True`?",
+            "True",
+            ["False", "None", "Error"],
+            "and has higher precedence than or.",
+            "(True and False) = False; False or True = True.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# FUNCTIONS
+# ------------------------------------------------------------------
+def _practice_functions_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which keyword is used to define a function in Python?",
+            "def",
+            ["func", "function", "define"],
+            "Python uses a specific short keyword.",
+            "`def` introduces a function definition.",
+        ),
+        _practice_q(
+            "Which is a valid function header?",
+            "def greet(name):",
+            ["function greet(name):", "def greet name:", "def greet(name)"],
+            "Look for def, name, parentheses, and a colon.",
+            "A function header needs all four elements.",
+        ),
+        _practice_q(
+            "What does `return` do inside a function?",
+            "Exits the function and sends a value back to the caller",
+            ["Prints the value", "Restarts the function", "Pauses the function"],
+            "return ends execution of the function.",
+            "`return value` both exits the function and delivers the result.",
+        ),
+        _practice_q(
+            "What is the output of:\n\ndef double(x): return x * 2\nprint(double(5))",
+            "10",
+            ["5", "double(5)", "None"],
+            "double(5) returns 5*2=10.",
+            "double(5) evaluates to 10 which print() displays.",
+        ),
+        _practice_q(
+            "What is a parameter vs an argument?",
+            "Parameter is the variable in the definition; argument is the value passed in the call",
+            ["They are the same thing", "Argument is in the definition; parameter is the value passed", "Parameters are numbers; arguments are strings"],
+            "Think about where each term applies.",
+            "def f(param): ... is the parameter; f(arg) is the argument.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_functions_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which defines a function with a default parameter value?",
+            "def greet(name='World'):",
+            ["def greet(name = None):", "def greet(name:='World'):", "def greet('World')"],
+            "Default values are assigned with = in the parameter list.",
+            "`name='World'` makes the argument optional.",
+        ),
+        _practice_q(
+            "What does `*args` allow in a function signature?",
+            "Accept any number of positional arguments as a tuple",
+            ["Accept keyword arguments", "Accept a single list argument", "Return multiple values"],
+            "*args packs extra positional arguments.",
+            "`*args` collects unlimited positional args into a tuple.",
+        ),
+        _practice_q(
+            "What is a pure function?",
+            "A function that always returns the same output for the same input and has no side effects",
+            ["A function that never raises exceptions", "A function that only uses integers", "A function with no parameters"],
+            "Think: same in → same out, no hidden changes.",
+            "Pure functions are deterministic and don't modify external state.",
+        ),
+        _practice_q(
+            "Which code correctly returns two values from a function?",
+            "def minmax(lst): return min(lst), max(lst)",
+            ["def minmax(lst): return [min(lst)] + [max(lst)]", "def minmax(lst): return min(lst); return max(lst)", "def minmax(lst): yield min(lst), max(lst)"],
+            "Python can return multiple values as a tuple.",
+            "Comma-separated returns create a tuple automatically.",
+        ),
+        _practice_q(
+            "What is recursion?",
+            "A function that calls itself to solve a smaller version of the problem",
+            ["A loop inside a function", "A function that returns None", "A function that takes another function as an argument"],
+            "Think about self-reference.",
+            "Recursion breaks a problem down by having the function call itself.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_functions_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is a higher-order function?",
+            "A function that takes another function as an argument or returns one",
+            ["A function with many parameters", "A function that runs quickly", "A function defined inside a class"],
+            "Think about map, filter, and sorted.",
+            "map(func, iterable) is a classic higher-order function.",
+        ),
+        _practice_q(
+            "What does a closure capture?",
+            "The variables from the enclosing scope at the time the inner function is defined",
+            ["Only global variables", "Only the function's own parameters", "Nothing — closures don't capture state"],
+            "A closure 'closes over' its surrounding variables.",
+            "The inner function retains access to outer variables even after the outer function returns.",
+        ),
+        _practice_q(
+            "Which is the correct way to create a lambda that squares a number?",
+            "lambda x: x ** 2",
+            ["lambda(x): x ** 2", "def lambda x: x ** 2", "lambda x => x ** 2"],
+            "Python lambda syntax: `lambda params: expression`.",
+            "`lambda x: x ** 2` is a one-line anonymous function.",
+        ),
+        _practice_q(
+            "What is memoization?",
+            "Caching function results so repeated calls with the same arguments skip recomputation",
+            ["Logging every function call", "Running a function in parallel", "Restarting a function from scratch each call"],
+            "It trades memory for speed.",
+            "Memoization stores results in a cache (e.g., a dict) to avoid redundant work.",
+        ),
+        _practice_q(
+            "What is the base case in recursion?",
+            "The condition where the function returns without calling itself again",
+            ["The first call to the recursive function", "The largest input value", "The return type of the function"],
+            "Without a base case the recursion never stops.",
+            "The base case terminates the recursion chain.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# STRINGS
+# ------------------------------------------------------------------
+def _practice_strings_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "How do you find the length of a string `s`?",
+            "len(s)",
+            ["s.size()", "s.length", "size(s)"],
+            "Python has a built-in function for length.",
+            "`len(s)` returns the number of characters.",
+        ),
+        _practice_q(
+            "Which expression returns the character at index 2 of string `s`?",
+            "s[2]",
+            ["s.get(2)", "s(2)", "s.char(2)"],
+            "Strings support bracket indexing like lists.",
+            "`s[2]` gives the character at position 2.",
+        ),
+        _practice_q(
+            "How do you convert string `s` to all uppercase?",
+            "s.upper()",
+            ["s.toUpper()", "upper(s)", "s.uppercase()"],
+            "Strings have built-in case methods.",
+            "`.upper()` returns the uppercased version.",
+        ),
+        _practice_q(
+            "Which code checks if string `s` starts with 'Hello'?",
+            "s.startswith('Hello')",
+            ["s.begins('Hello')", "s[:5] = 'Hello'", "s.find('Hello') == 0"],
+            "Python strings have a `startswith` method.",
+            "`.startswith(prefix)` returns True if the string begins with prefix.",
+        ),
+        _practice_q(
+            "What does `'hello world'.split()` return?",
+            "['hello', 'world']",
+            ["'hello world'", "('hello', 'world')", "['h','e','l','l','o',' ','w','o','r','l','d']"],
+            "split() without arguments splits on whitespace.",
+            "`.split()` splits on spaces by default, returning a list of words.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_strings_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "How do you join a list of strings `words` with a space?",
+            "' '.join(words)",
+            ["words.join(' ')", "join(words, ' ')", "str.join(words)"],
+            "The separator calls `.join(iterable)`.",
+            "`' '.join(words)` places a space between each element.",
+        ),
+        _practice_q(
+            "Which slice returns the last 3 characters of string `s`?",
+            "s[-3:]",
+            ["s[len(s)-3:len(s)]", "s[:3]", "s[-3:-1]"],
+            "Negative indices count from the end.",
+            "`s[-3:]` starts 3 from the end and goes to the end.",
+        ),
+        _practice_q(
+            "How do you replace all occurrences of 'a' with 'e' in string `s`?",
+            "s.replace('a', 'e')",
+            ["s.swap('a', 'e')", "s.sub('a', 'e')", "replace(s, 'a', 'e')"],
+            "Strings have a `.replace()` method.",
+            "`.replace(old, new)` replaces every occurrence.",
+        ),
+        _practice_q(
+            "What does `'  hello  '.strip()` return?",
+            "'hello'",
+            ["'  hello  '", "'hello  '", "'  hello'"],
+            "strip removes leading and trailing whitespace.",
+            "`.strip()` removes whitespace from both ends.",
+        ),
+        _practice_q(
+            "How do you check if a string `s` contains only digits?",
+            "s.isdigit()",
+            ["s.isnumber()", "all(c in '0123456789' for c in s)", "s.isnum()"],
+            "Strings have built-in character-type checking methods.",
+            "`.isdigit()` returns True if every character is a digit.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_strings_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which is the most efficient way to build a long string from many parts in Python?",
+            "''.join(parts_list)",
+            ["result = ''\nfor p in parts: result += p", "result = str(parts_list)", "result = sum(parts_list)"],
+            "String concatenation in a loop creates many intermediate objects.",
+            "join is O(n) while repeated += is O(n²) in the worst case.",
+        ),
+        _practice_q(
+            "What does a regular expression `re.findall(r'\\d+', s)` return?",
+            "A list of all digit sequences in s",
+            ["The first digit found", "True if s contains digits", "The number of digits in s"],
+            "findall returns all non-overlapping matches.",
+            "`re.findall` collects every match into a list.",
+        ),
+        _practice_q(
+            "Which approach checks if a string is a palindrome efficiently?",
+            "s == s[::-1]",
+            ["for i in range(len(s)//2): if s[i] != s[-i-1]: return False", "s.reverse() == s", "sorted(s) == sorted(s[::-1])"],
+            "Slicing with step -1 reverses a string.",
+            "`s[::-1]` reverses s; comparing to the original checks for palindrome.",
+        ),
+        _practice_q(
+            "What is the time complexity of searching for a substring in a string of length n using `in`?",
+            "O(n) on average",
+            ["O(1)", "O(n²)", "O(log n)"],
+            "Python's string search is optimized but still scans the string.",
+            "The average case is O(n) with CPython's optimized algorithm.",
+        ),
+        _practice_q(
+            "Which f-string expression formats a float `pi` to 2 decimal places?",
+            "f'{pi:.2f}'",
+            ["f'{pi:2}'", "f'{pi|.2f}'", "f'{pi,2f}'"],
+            "Format specifiers use a colon after the variable name.",
+            "`:.2f` means fixed-point notation with 2 decimal places.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# LISTS
+# ------------------------------------------------------------------
+def _practice_lists_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "How do you add an item to the end of a list?",
+            "my_list.append(item)",
+            ["my_list.add(item)", "my_list.push(item)", "my_list.insert(item)"],
+            "Lists have a specific method for adding to the end.",
+            "`.append()` adds a single item to the end.",
+        ),
+        _practice_q(
+            "How do you remove the last item from a list and get its value?",
+            "item = my_list.pop()",
+            ["item = my_list.remove(-1)", "item = my_list[-1]; del my_list[-1]", "item = my_list.delete()"],
+            "A single method both removes and returns the last element.",
+            "`.pop()` removes and returns the last item.",
+        ),
+        _practice_q(
+            "Which expression returns the number of elements in `my_list`?",
+            "len(my_list)",
+            ["my_list.size()", "my_list.count()", "count(my_list)"],
+            "Python uses a built-in function.",
+            "`len()` works on lists, strings, dicts, and more.",
+        ),
+        _practice_q(
+            "How do you check if `x` is in `my_list`?",
+            "if x in my_list:",
+            ["if my_list.contains(x):", "if x == my_list:", "if my_list.find(x):"],
+            "Python's `in` operator works directly.",
+            "`in` tests membership efficiently.",
+        ),
+        _practice_q(
+            "How do you sort a list `nums` in ascending order (in place)?",
+            "nums.sort()",
+            ["nums.order()", "sorted(nums)", "nums.ascending()"],
+            "There is a list method and a built-in function; one is in-place.",
+            "`.sort()` modifies the list in place; `sorted()` returns a new list.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_lists_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which creates a copy of a list so the original isn't modified?",
+            "copy = my_list[:]",
+            ["copy = my_list", "copy = list(my_list)", "copy = my_list.copy()"],
+            "= only copies the reference. Any of the other three options work.",
+            "`my_list[:]`, `list(my_list)`, and `.copy()` all create shallow copies.",
+        ),
+        _practice_q(
+            "What does `my_list[1:4]` return?",
+            "Elements at indices 1, 2, 3",
+            ["Elements at indices 1, 2, 3, 4", "Elements at indices 0, 1, 2, 3", "Elements at indices 2, 3, 4"],
+            "Slicing is inclusive of the start and exclusive of the stop.",
+            "Slice [1:4] gives indices 1, 2, and 3.",
+        ),
+        _practice_q(
+            "How do you remove the first occurrence of value `v` from a list?",
+            "my_list.remove(v)",
+            ["my_list.pop(v)", "del my_list[v]", "my_list.delete(v)"],
+            ".remove() searches for the value, not the index.",
+            "`.remove(v)` finds and removes the first item equal to v.",
+        ),
+        _practice_q(
+            "Which expression filters a list to keep only even numbers?",
+            "[x for x in nums if x % 2 == 0]",
+            ["[x for x in nums if x % 2]", "[x for x in nums if x % 2 != 0]", "filter(nums, lambda x: x % 2 == 0)"],
+            "x % 2 == 0 is True for even numbers.",
+            "A list comprehension with an if clause acts as a filter.",
+        ),
+        _practice_q(
+            "What is the difference between `.append()` and `.extend()`?",
+            ".append() adds a single item; .extend() adds all items from an iterable",
+            ["They are identical", ".extend() adds a single item; .append() adds multiple", ".append() makes a copy; .extend() modifies in place"],
+            "Think about what happens when you pass a list to each.",
+            "append([1,2]) adds the list as one element; extend([1,2]) adds 1 and 2 separately.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_lists_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is the time complexity of inserting at the beginning of a Python list?",
+            "O(n)",
+            ["O(1)", "O(log n)", "O(n²)"],
+            "All existing elements must shift right.",
+            "Inserting at index 0 shifts every element, costing O(n).",
+        ),
+        _practice_q(
+            "Which data structure is better than a list for frequent insertions at both ends?",
+            "collections.deque",
+            ["tuple", "set", "dict"],
+            "Deques are optimized for O(1) appends/pops at both ends.",
+            "`collections.deque` provides O(1) appendleft/popleft vs list's O(n).",
+        ),
+        _practice_q(
+            "What does `sorted(data, key=lambda x: x[1], reverse=True)` do?",
+            "Returns a new list sorted by the second element of each item, descending",
+            ["Sorts data in place by index 1, ascending", "Returns a list of second elements only", "Raises an error if items have no index 1"],
+            "key= specifies what to sort by; reverse=True means descending.",
+            "The key function extracts the sort criterion; reverse flips the order.",
+        ),
+        _practice_q(
+            "Which list operation has O(1) average time complexity?",
+            "Accessing an element by index: my_list[i]",
+            ["Searching for a value: x in my_list", "Inserting at position 0: my_list.insert(0, x)", "Deleting from the middle"],
+            "Lists are backed by arrays; index access is direct.",
+            "Index lookup is O(1); search, insert-at-front, and mid-delete are O(n).",
+        ),
+        _practice_q(
+            "What does `list(zip([1,2,3], ['a','b','c']))` return?",
+            "[(1, 'a'), (2, 'b'), (3, 'c')]",
+            ["[[1,'a'], [2,'b'], [3,'c']]", "([1,2,3], ['a','b','c'])", "{'1':'a','2':'b','3':'c'}"],
+            "zip pairs elements; list() materializes the iterator.",
+            "zip yields tuples of paired elements; wrapping in list() gives a list of tuples.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# DICTS
+# ------------------------------------------------------------------
+def _practice_dicts_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "How do you access the value for key 'name' in dict `d`?",
+            "d['name']",
+            ["d.get_value('name')", "d.name", "d(name)"],
+            "Square brackets work for dict access.",
+            "`d['name']` retrieves the value associated with key 'name'.",
+        ),
+        _practice_q(
+            "How do you safely get a value from dict `d` without raising a KeyError?",
+            "d.get('key', default)",
+            ["d['key'] or default", "d.fetch('key')", "try: d['key'] except: default"],
+            ".get() has a built-in default.",
+            "`.get(key, default)` returns default if the key is missing.",
+        ),
+        _practice_q(
+            "How do you add or update key 'x' with value 5 in dict `d`?",
+            "d['x'] = 5",
+            ["d.add('x', 5)", "d.insert('x', 5)", "d.set('x', 5)"],
+            "Dict assignment works with [] notation.",
+            "Square bracket assignment adds the key or overwrites it.",
+        ),
+        _practice_q(
+            "How do you check if key 'age' exists in dict `d`?",
+            "if 'age' in d:",
+            ["if d.contains('age'):", "if d.has('age'):", "if 'age' == d:"],
+            "`in` tests key membership in a dict.",
+            "`in` on a dict checks keys by default.",
+        ),
+        _practice_q(
+            "What does `d.keys()` return?",
+            "A view of all keys in the dictionary",
+            ["A list of values", "A list of (key, value) tuples", "The number of keys"],
+            "Think about what 'keys' means.",
+            "`d.keys()` returns a dict_keys view of all keys.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_dicts_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which loop iterates over key-value pairs in dict `d`?",
+            "for key, val in d.items():",
+            ["for key, val in d:", "for key in d.values():", "for key, val in zip(d):"],
+            ".items() yields (key, value) pairs.",
+            "`.items()` returns (key, value) tuples for iteration.",
+        ),
+        _practice_q(
+            "How do you count word frequencies in a list using a dict?",
+            "freq = {}\nfor w in words: freq[w] = freq.get(w, 0) + 1",
+            ["freq = {w: 1 for w in words}", "freq = dict(words)", "for w in words: freq[w] += 1"],
+            "Use .get() to safely handle missing keys.",
+            "`.get(w, 0)` returns 0 the first time a word appears.",
+        ),
+        _practice_q(
+            "Which class simplifies frequency counting?",
+            "collections.Counter",
+            ["collections.deque", "collections.OrderedDict", "collections.defaultdict"],
+            "Think about a dict subclass specifically designed for counting.",
+            "`Counter` counts hashable objects automatically.",
+        ),
+        _practice_q(
+            "What does `dict.setdefault(key, default)` do?",
+            "Returns the value for key; inserts key with default if not present",
+            ["Overwrites the value even if the key exists", "Raises KeyError if missing", "Returns default without modifying the dict"],
+            "It's like .get() but also inserts.",
+            "setdefault inserts the key with the default value if the key doesn't exist.",
+        ),
+        _practice_q(
+            "Which creates a dict mapping each number to its square for 1-5?",
+            "{x: x**2 for x in range(1, 6)}",
+            ["{x**2 for x in range(1, 6)}", "dict(x**2 for x in range(1, 6))", "{range(1, 6): x**2}"],
+            "Dict comprehensions have key: value syntax.",
+            "`{key: value for ...}` is a dict comprehension.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_dicts_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is the average time complexity of dict lookup?",
+            "O(1)",
+            ["O(n)", "O(log n)", "O(n²)"],
+            "Dicts use hashing for fast access.",
+            "Hash table lookups are O(1) on average.",
+        ),
+        _practice_q(
+            "Which approach groups items by a key using a dict of lists?",
+            "from collections import defaultdict\ngroups = defaultdict(list)\nfor item in data: groups[item.key].append(item)",
+            ["groups = {item.key: item for item in data}", "groups = dict(data)", "groups = {k: [] for k in data}"],
+            "defaultdict avoids manually checking if a key exists.",
+            "defaultdict(list) auto-creates empty lists for new keys.",
+        ),
+        _practice_q(
+            "What does merging two dicts with `{**d1, **d2}` do when both have the same key?",
+            "The value from d2 overwrites the value from d1",
+            ["The value from d1 is kept", "A list of both values is created", "A KeyError is raised"],
+            "Later keys win in dict unpacking.",
+            "Keys from d2 overwrite d1 when the dicts are merged.",
+        ),
+        _practice_q(
+            "Which code inverts a dict (swaps keys and values)?",
+            "{v: k for k, v in d.items()}",
+            ["{k: v for v, k in d}", "d.reverse()", "{d.values(): d.keys()}"],
+            "Swap k and v in a dict comprehension.",
+            "`{v: k for k, v in d.items()}` creates the inverted mapping.",
+        ),
+        _practice_q(
+            "What can go wrong if you use a mutable object (like a list) as a dict key?",
+            "It raises a TypeError because mutable objects are not hashable",
+            ["The list is automatically converted to a tuple", "The dict stores a copy of the list", "It works fine"],
+            "Dict keys must be hashable.",
+            "Lists are mutable and unhashable; use tuples as dict keys instead.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# SETS
+# ------------------------------------------------------------------
+def _practice_sets_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What makes a set different from a list?",
+            "Sets contain no duplicates and are unordered",
+            ["Sets are sorted", "Sets allow duplicates", "Sets are accessed by index"],
+            "Think about the core guarantee of a set.",
+            "Sets automatically discard duplicate values and have no order.",
+        ),
+        _practice_q(
+            "How do you create an empty set in Python?",
+            "s = set()",
+            ["s = {}", "s = []", "s = set"],
+            "{} creates an empty dict, not a set.",
+            "`set()` is the only way to create an empty set.",
+        ),
+        _practice_q(
+            "How do you add value `v` to set `s`?",
+            "s.add(v)",
+            ["s.append(v)", "s.insert(v)", "s.push(v)"],
+            "Sets have a specific method for adding items.",
+            "`.add()` inserts a value if it's not already present.",
+        ),
+        _practice_q(
+            "What is the average time complexity of `x in s` for a set `s`?",
+            "O(1)",
+            ["O(n)", "O(log n)", "O(n²)"],
+            "Sets use hashing just like dicts.",
+            "Set membership tests are O(1) on average.",
+        ),
+        _practice_q(
+            "How do you remove duplicates from a list `lst`?",
+            "lst = list(set(lst))",
+            ["lst = lst.unique()", "lst.removeDuplicates()", "lst = [x for x in set(lst)]"],
+            "Convert to a set (removes duplicates) then back to a list.",
+            "`set()` removes duplicates; `list()` converts it back.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_sets_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which operation returns elements in set A but not in set B?",
+            "A - B  (or A.difference(B))",
+            ["A & B", "A | B", "A ^ B"],
+            "Think of set subtraction.",
+            "`A - B` gives elements in A that are not in B.",
+        ),
+        _practice_q(
+            "Which operation returns elements in either A or B but not both?",
+            "A ^ B  (symmetric difference)",
+            ["A | B", "A & B", "A - B"],
+            "Think about exclusive OR for sets.",
+            "`A ^ B` returns elements unique to each set.",
+        ),
+        _practice_q(
+            "How do you find common elements between two lists without nested loops?",
+            "set(list1) & set(list2)",
+            ["list1 + list2", "[x for x in list1 if x in list2]", "zip(list1, list2)"],
+            "Set intersection is O(min(n, m)) rather than O(n*m).",
+            "Converting to sets and using & finds the intersection efficiently.",
+        ),
+        _practice_q(
+            "What does `frozenset` provide that a regular set does not?",
+            "Immutability — it can be used as a dict key or set element",
+            ["Sorted iteration", "Duplicate elements", "Faster lookups"],
+            "Some data structures require hashable (immutable) elements.",
+            "`frozenset` is an immutable set that can be hashed.",
+        ),
+        _practice_q(
+            "Which code checks if set A is a subset of set B?",
+            "A.issubset(B)  or  A <= B",
+            ["A in B", "A == B[:len(A)]", "A.contains(B)"],
+            "Sets have subset/superset relationship operators.",
+            "`A <= B` returns True if every element of A is also in B.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_sets_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "When should you prefer a set over a list for membership testing?",
+            "When you need repeated O(1) lookups and don't care about order",
+            ["When you need to keep duplicates", "When you need index-based access", "When the data is very small (< 5 elements)"],
+            "For large datasets, O(1) vs O(n) lookup matters greatly.",
+            "Sets shine for many membership checks on large datasets.",
+        ),
+        _practice_q(
+            "Which approach finds the first duplicate in a list in O(n) time?",
+            "seen = set()\nfor x in lst:\n    if x in seen: return x\n    seen.add(x)",
+            ["Sort the list then scan for adjacent equal elements", "Use two nested loops", "Convert the list to a set and compare lengths"],
+            "A set tracks seen values in O(1) per check.",
+            "Checking membership in a set each iteration is O(1), giving O(n) total.",
+        ),
+        _practice_q(
+            "What is the space complexity of storing n distinct elements in a set?",
+            "O(n)",
+            ["O(1)", "O(n²)", "O(log n)"],
+            "Each element takes space.",
+            "A set of n elements uses O(n) extra space.",
+        ),
+        _practice_q(
+            "Why can sets not contain lists as elements?",
+            "Lists are mutable and therefore not hashable",
+            ["Lists are too large", "Python disallows nested collections", "Sets already behave like lists"],
+            "Hashability is required for set elements.",
+            "Set elements must be hashable; mutable objects like lists are not.",
+        ),
+        _practice_q(
+            "Which operation checks if two sets have no elements in common?",
+            "A.isdisjoint(B)",
+            ["A & B == set()", "not A | B", "A - B == A"],
+            "There is a dedicated set method for this.",
+            "`.isdisjoint(B)` returns True if A and B share no elements.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# RECURSION
+# ------------------------------------------------------------------
+def _practice_recursion_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What are the two required parts of every recursive function?",
+            "A base case and a recursive case",
+            ["A loop and a return", "A parameter and a return", "An if statement and a print"],
+            "Think about what stops the recursion and what continues it.",
+            "The base case stops the recursion; the recursive case breaks the problem down.",
+        ),
+        _practice_q(
+            "What happens if a recursive function has no base case?",
+            "It causes infinite recursion and a stack overflow",
+            ["It returns None automatically", "Python catches the error silently", "It runs forever without error"],
+            "Without a stopping condition the function calls itself indefinitely.",
+            "Python raises a RecursionError when the call stack is exhausted.",
+        ),
+        _practice_q(
+            "Which is the correct recursive function to compute factorial(n)?",
+            "def factorial(n):\n    if n == 0: return 1\n    return n * factorial(n - 1)",
+            ["def factorial(n): return n * factorial(n)", "def factorial(n): if n == 1: return n", "def factorial(n): return factorial(n) * n"],
+            "Base case: factorial(0) = 1. Recursive case: n * factorial(n-1).",
+            "0! = 1 is the base case; n! = n × (n-1)! is the recursive step.",
+        ),
+        _practice_q(
+            "What is the output of `fibonacci(4)` if fib(0)=0, fib(1)=1, fib(n)=fib(n-1)+fib(n-2)?",
+            "3",
+            ["2", "4", "5"],
+            "Compute: fib(2)=1, fib(3)=2, fib(4)=3.",
+            "fib(4) = fib(3) + fib(2) = 2 + 1 = 3.",
+        ),
+        _practice_q(
+            "Which best describes the 'call stack' in recursion?",
+            "A stack of function calls waiting to return",
+            ["A list of all variables in the program", "The order in which files are executed", "A queue of scheduled tasks"],
+            "Each call is pushed; each return pops.",
+            "Each recursive call adds a frame to the call stack until the base case is hit.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_recursion_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is tail recursion?",
+            "A recursive call is the last operation in the function",
+            ["Recursion that uses a loop", "Recursion with two base cases", "Recursion that returns a list"],
+            "The result is returned directly without further computation.",
+            "Tail recursion allows some languages to optimize stack usage.",
+        ),
+        _practice_q(
+            "What is the time complexity of naive recursive Fibonacci?",
+            "O(2ⁿ)",
+            ["O(n)", "O(n²)", "O(log n)"],
+            "Each call branches into two more calls.",
+            "The call tree has ~2ⁿ nodes without memoization.",
+        ),
+        _practice_q(
+            "Which memoization technique speeds up recursive Fibonacci to O(n)?",
+            "Cache results in a dict: memo[n] = result before returning",
+            ["Use a for loop instead", "Increase the recursion limit", "Use two separate recursive functions"],
+            "Store already-computed values to avoid recomputation.",
+            "Memoization reduces repeated subproblems from O(2ⁿ) to O(n).",
+        ),
+        _practice_q(
+            "Which code recursively sums a list `nums`?",
+            "def rsum(nums):\n    if not nums: return 0\n    return nums[0] + rsum(nums[1:])",
+            ["def rsum(nums): return nums + rsum(nums)", "def rsum(nums): for n in nums: return n", "def rsum(nums): return sum(nums[0])"],
+            "Base: empty list = 0. Recursive: first + sum of rest.",
+            "An empty list sums to 0; otherwise add the head to the recursive sum of the tail.",
+        ),
+        _practice_q(
+            "What does the recursion tree for `mergeSort` look like?",
+            "A binary tree that splits the list in half each level (O(log n) levels)",
+            ["A linear chain of calls (O(n) levels)", "A flat tree with one level", "A ternary tree with 3 splits per level"],
+            "Each call splits the list into two halves.",
+            "Splitting in half each time gives log₂(n) levels of recursion.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_recursion_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is the space complexity of recursive DFS on a binary tree of height h?",
+            "O(h) due to the call stack",
+            ["O(n)", "O(1)", "O(n²)"],
+            "Each level of the tree adds one frame to the stack.",
+            "The call stack grows to depth h, so space is O(h).",
+        ),
+        _practice_q(
+            "Which technique converts recursion to iteration to avoid stack overflow?",
+            "Use an explicit stack data structure",
+            ["Use a queue", "Use a set", "Use a dict"],
+            "Simulate the call stack manually.",
+            "An explicit stack mimics what the call stack does in recursion.",
+        ),
+        _practice_q(
+            "What is the recurrence relation for merge sort's time complexity?",
+            "T(n) = 2T(n/2) + O(n)",
+            ["T(n) = T(n-1) + O(1)", "T(n) = 4T(n/2) + O(n)", "T(n) = 2T(n) + O(n)"],
+            "Split into 2 halves; merging costs O(n).",
+            "Two subproblems of size n/2, plus O(n) merge work, solves to O(n log n).",
+        ),
+        _practice_q(
+            "Which code generates all permutations of a list recursively?",
+            "def perms(lst):\n    if len(lst) <= 1: return [lst]\n    return [lst[i:i+1]+p for i in range(len(lst)) for p in perms(lst[:i]+lst[i+1:])]",
+            ["def perms(lst): return [lst]", "def perms(lst): return sorted(lst)", "def perms(lst): for i in lst: yield i"],
+            "Fix each element and recurse on the remainder.",
+            "Choose each element as the first; recursively permute the rest.",
+        ),
+        _practice_q(
+            "What is dynamic programming in relation to recursion?",
+            "Solving a recursive problem by storing subproblem results to avoid recomputation",
+            ["Converting recursion to a while loop", "Using recursion without a base case", "Choosing the greedy option at each step"],
+            "DP = recursion + memoization (top-down) or bottom-up tabulation.",
+            "DP trades extra space for reduced time by caching subproblem answers.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# OOP / CLASSES
+# ------------------------------------------------------------------
+def _practice_oop_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What keyword defines a class in Python?",
+            "class",
+            ["def", "object", "type"],
+            "Think about the keyword that starts a class definition.",
+            "`class ClassName:` begins a class definition.",
+        ),
+        _practice_q(
+            "What is `__init__` used for?",
+            "It initializes a new instance of the class",
+            ["It defines a class method", "It deletes the object", "It imports the class"],
+            "__init__ runs automatically when you create an object.",
+            "`__init__` is the constructor — it sets up the object's initial state.",
+        ),
+        _practice_q(
+            "What does `self` refer to inside a method?",
+            "The current instance of the class",
+            ["The class itself", "The parent class", "The module"],
+            "self is the first parameter of instance methods.",
+            "`self` allows methods to access and modify the instance's attributes.",
+        ),
+        _practice_q(
+            "How do you create an object from class `Dog`?",
+            "dog = Dog()",
+            ["dog = new Dog()", "dog = Dog.create()", "dog = class Dog()"],
+            "Python doesn't use the `new` keyword.",
+            "Call the class name like a function to create an instance.",
+        ),
+        _practice_q(
+            "What is the difference between a class attribute and an instance attribute?",
+            "Class attributes are shared by all instances; instance attributes are unique to each object",
+            ["There is no difference", "Instance attributes are set in __init__; class attributes cannot be changed", "Class attributes can only be strings"],
+            "Think about where each type is defined.",
+            "Class attributes are defined in the class body; instance attributes are set via self.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_oop_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is inheritance in OOP?",
+            "A class inherits attributes and methods from a parent class",
+            ["A class copies data from a file", "A function calls itself", "An object creates another object"],
+            "Think about code reuse through a parent-child relationship.",
+            "Inheritance allows child classes to reuse and extend parent behavior.",
+        ),
+        _practice_q(
+            "How do you call the parent class constructor in Python?",
+            "super().__init__(...)",
+            ["parent.__init__(self, ...)", "self.super().__init__(...)", "base.__init__(...)"],
+            "Python provides a built-in function for this.",
+            "`super().__init__()` delegates to the parent class constructor.",
+        ),
+        _practice_q(
+            "What is polymorphism?",
+            "Different classes implementing the same interface in different ways",
+            ["A class with many attributes", "A function that takes many parameters", "Two variables with the same name"],
+            "Think about one name, many behaviors.",
+            "Polymorphism lets different objects respond to the same method call differently.",
+        ),
+        _practice_q(
+            "What does `@property` do in Python?",
+            "Defines a method that can be accessed like an attribute",
+            ["Makes an attribute private", "Converts an attribute to a class variable", "Marks a method as static"],
+            "Properties allow computed attributes.",
+            "`@property` lets you call `obj.name` which actually runs a method.",
+        ),
+        _practice_q(
+            "What is encapsulation?",
+            "Hiding internal implementation details and exposing only a public interface",
+            ["Making all methods public", "Putting all code in one class", "Storing data in a database"],
+            "Think about information hiding.",
+            "Encapsulation protects internal state and simplifies the class interface.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_oop_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is the Method Resolution Order (MRO) in Python?",
+            "The order Python searches through the class hierarchy to find a method",
+            ["The order methods are defined in a class", "The speed ranking of methods", "The order instance attributes are initialized"],
+            "MRO matters most in multiple inheritance.",
+            "Python uses C3 linearization to determine MRO.",
+        ),
+        _practice_q(
+            "What are dunder (magic) methods?",
+            "Special methods with double underscores that customize class behavior",
+            ["Methods that are very slow", "Hidden methods not accessible to users", "Methods that only work in Python 3"],
+            "Think about __init__, __str__, __len__, etc.",
+            "Dunders let you define how objects behave with operators and built-in functions.",
+        ),
+        _practice_q(
+            "What does `__repr__` do?",
+            "Returns a developer-friendly string representation of the object",
+            ["Deletes the object", "Returns the object's type", "Converts the object to a dict"],
+            "There are two string representations: one for users, one for developers.",
+            "`__repr__` is used for debugging; `__str__` is for user display.",
+        ),
+        _practice_q(
+            "What is a class method vs a static method?",
+            "Class method receives cls; static method receives no implicit argument",
+            ["They are identical", "Static method receives self; class method receives nothing", "Class method is faster"],
+            "Decorators: @classmethod receives cls, @staticmethod receives nothing.",
+            "Class methods can access/modify class state via cls; static methods cannot.",
+        ),
+        _practice_q(
+            "What is the Liskov Substitution Principle?",
+            "A subclass should be usable wherever the parent class is expected without breaking behavior",
+            ["All methods must be overridden in subclasses", "Parent classes should inherit from subclasses", "Classes should not use inheritance"],
+            "Think about whether swapping child for parent breaks anything.",
+            "LSP ensures subclasses honor the contract of their parent class.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# SORTING
+# ------------------------------------------------------------------
+def _practice_sorting_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "Which built-in function returns a sorted copy of a list without modifying the original?",
+            "sorted(lst)",
+            ["lst.sort()", "sort(lst)", "lst.sorted()"],
+            "One is a method (in-place), one is a function (new copy).",
+            "`sorted()` returns a new sorted list; `.sort()` modifies in place.",
+        ),
+        _practice_q(
+            "What is the default sort order in Python?",
+            "Ascending (smallest to largest)",
+            ["Descending", "Alphabetical only", "Insertion order"],
+            "Think about the natural order of numbers.",
+            "Python sorts ascending by default.",
+        ),
+        _practice_q(
+            "How do you sort a list of strings by length?",
+            "sorted(words, key=len)",
+            ["sorted(words, len)", "words.sort(by=len)", "sorted(words.length)"],
+            "Use the `key` argument with a callable.",
+            "`key=len` tells sorted to use the length of each string as the sort key.",
+        ),
+        _practice_q(
+            "What is the time complexity of Python's built-in sort (Timsort)?",
+            "O(n log n)",
+            ["O(n)", "O(n²)", "O(log n)"],
+            "Timsort is a hybrid merge sort / insertion sort.",
+            "Timsort is O(n log n) in the worst case.",
+        ),
+        _practice_q(
+            "How do you sort a list in descending order?",
+            "sorted(lst, reverse=True)",
+            ["sorted(lst, order='desc')", "lst.sort(False)", "sorted(lst)[::-1]"],
+            "There's a keyword argument for this.",
+            "`reverse=True` sorts from largest to smallest.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_sorting_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is bubble sort's worst-case time complexity?",
+            "O(n²)",
+            ["O(n log n)", "O(n)", "O(log n)"],
+            "Compare adjacent elements n times for n elements.",
+            "n passes of up to n comparisons gives O(n²).",
+        ),
+        _practice_q(
+            "Which sorting algorithm is most efficient for nearly-sorted data?",
+            "Insertion sort",
+            ["Quick sort", "Merge sort", "Selection sort"],
+            "Insertion sort is adaptive.",
+            "Insertion sort runs in O(n) for nearly-sorted input.",
+        ),
+        _practice_q(
+            "How do you sort a list of dicts by the 'score' key in descending order?",
+            "sorted(data, key=lambda x: x['score'], reverse=True)",
+            ["sorted(data, key='score', reverse=True)", "data.sort(by='score', desc=True)", "sorted(data, x['score'])"],
+            "Use a lambda to extract the sort key from each dict.",
+            "The lambda extracts 'score'; reverse=True sorts highest first.",
+        ),
+        _practice_q(
+            "What is the key advantage of merge sort over quick sort?",
+            "Merge sort is always O(n log n); quick sort can degrade to O(n²)",
+            ["Merge sort uses less memory", "Merge sort is faster on small lists", "Merge sort is in-place"],
+            "Think about worst-case guarantees.",
+            "Merge sort's divide-and-merge approach guarantees O(n log n).",
+        ),
+        _practice_q(
+            "What is a stable sort?",
+            "A sort that preserves the relative order of equal elements",
+            ["A sort that never raises an exception", "A sort with O(1) space", "A sort that works on any data type"],
+            "Think about what happens to ties.",
+            "Python's sort is stable — equal elements keep their original order.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_sorting_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is the best-case time complexity of quick sort?",
+            "O(n log n)",
+            ["O(n)", "O(n²)", "O(log n)"],
+            "Best case occurs when the pivot always divides the list evenly.",
+            "Even in the best case, quick sort does O(n log n) comparisons.",
+        ),
+        _practice_q(
+            "Which sorting algorithm achieves O(n) time under certain conditions?",
+            "Counting sort / Radix sort (for integers in a bounded range)",
+            ["Merge sort", "Quick sort", "Heap sort"],
+            "Some algorithms bypass the O(n log n) comparison lower bound.",
+            "Non-comparison sorts like Counting sort are O(n + k) for k unique values.",
+        ),
+        _practice_q(
+            "What is the space complexity of merge sort?",
+            "O(n) — requires a temporary array for merging",
+            ["O(1)", "O(log n)", "O(n²)"],
+            "Merging two halves requires extra space proportional to input size.",
+            "Merge sort needs O(n) auxiliary space for the merge step.",
+        ),
+        _practice_q(
+            "How does heap sort achieve O(n log n) with O(1) space?",
+            "It builds a max-heap in place and repeatedly extracts the maximum",
+            ["It partitions the list like quick sort", "It merges sorted halves like merge sort", "It counts occurrences like counting sort"],
+            "Heapify is O(n); extracting each max is O(log n).",
+            "n extractions of O(log n) each gives O(n log n) with no extra space.",
+        ),
+        _practice_q(
+            "When should you implement your own sort instead of using built-in sorted()?",
+            "Almost never — Timsort is highly optimized; customize only via key/reverse",
+            ["When sorting more than 1000 items", "When you need descending order", "When sorting strings"],
+            "Built-in sorts are implemented in C and heavily optimized.",
+            "Prefer `sorted()` with `key=` for custom ordering rather than rolling your own.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# SEARCHING
+# ------------------------------------------------------------------
+def _practice_searching_easy(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is linear search?",
+            "Checking each element one by one until the target is found",
+            ["Jumping to the middle of a list", "Using a hash map for lookup", "Sorting the list first"],
+            "Think about the simplest possible search strategy.",
+            "Linear search scans every element in order.",
+        ),
+        _practice_q(
+            "What is the time complexity of linear search?",
+            "O(n)",
+            ["O(1)", "O(log n)", "O(n²)"],
+            "In the worst case you examine every element.",
+            "You may need to check all n elements.",
+        ),
+        _practice_q(
+            "Which Python expression checks if `x` is in a list `lst`?",
+            "x in lst",
+            ["lst.search(x)", "lst.find(x)", "x == lst"],
+            "`in` tests membership.",
+            "`x in lst` performs a linear search on the list.",
+        ),
+        _practice_q(
+            "What does `lst.index(x)` return?",
+            "The index of the first occurrence of x",
+            ["True if x is in lst", "The number of times x appears", "The last index of x"],
+            ".index() returns a position, not a boolean.",
+            "`.index(x)` returns the first index where x is found.",
+        ),
+        _practice_q(
+            "When is linear search preferred over binary search?",
+            "When the list is unsorted",
+            ["When the list is very large", "When you need O(log n) time", "When the list contains only integers"],
+            "Binary search requires sorted data.",
+            "Linear search works on unsorted data; binary search requires sorting.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_searching_medium(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is the time complexity of binary search?",
+            "O(log n)",
+            ["O(n)", "O(1)", "O(n log n)"],
+            "The search space is halved each step.",
+            "Halving n takes log₂(n) steps.",
+        ),
+        _practice_q(
+            "Which prerequisite must be met before applying binary search?",
+            "The list must be sorted",
+            ["The list must be of even length", "The target must be in the list", "The list must contain integers only"],
+            "Binary search makes decisions based on relative order.",
+            "Without sorting, the comparison direction is undefined.",
+        ),
+        _practice_q(
+            "What does Python's `bisect.bisect_left(lst, x)` return?",
+            "The leftmost index where x can be inserted to keep lst sorted",
+            ["The index of x in lst", "True if x is in lst", "The number of elements less than x"],
+            "bisect does binary search for insertion positions.",
+            "`bisect_left` finds the insertion point at the left side of any equal range.",
+        ),
+        _practice_q(
+            "Which code correctly performs binary search iteratively?",
+            "lo, hi = 0, len(lst)-1\nwhile lo <= hi:\n    mid=(lo+hi)//2\n    if lst[mid]==x: return mid\n    elif lst[mid]<x: lo=mid+1\n    else: hi=mid-1\nreturn -1",
+            ["while lo < hi: mid=(lo+hi)//2", "lo=0; hi=len(lst)\nwhile lo<hi: mid=lo+hi//2", "for mid in range(lo, hi): if lst[mid]==x: return mid"],
+            "Use integer division for mid; condition is lo <= hi.",
+            "lo <= hi handles single-element ranges; // gives a valid integer index.",
+        ),
+        _practice_q(
+            "What is a hash table's average-case search complexity?",
+            "O(1)",
+            ["O(n)", "O(log n)", "O(n²)"],
+            "Hashing maps keys directly to buckets.",
+            "A well-designed hash table looks up values in constant time on average.",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+def _practice_searching_hard(language: str) -> List[StepQuestion]:
+    raw = [
+        _practice_q(
+            "What is the worst-case time complexity of binary search?",
+            "O(log n)",
+            ["O(n)", "O(1)", "O(n²)"],
+            "Even in the worst case, the search space halves each step.",
+            "Binary search is O(log n) in both average and worst cases.",
+        ),
+        _practice_q(
+            "How do you use binary search to find the leftmost position where a condition becomes True?",
+            "lo=0; hi=n\nwhile lo<hi: mid=(lo+hi)//2\n  if cond(mid): hi=mid\n  else: lo=mid+1\nreturn lo",
+            ["Search linearly until cond is True", "Use bisect.bisect_right()", "Use max() with a key function"],
+            "This is a 'find first True' binary search pattern.",
+            "Narrowing hi when the condition is met finds the leftmost True.",
+        ),
+        _practice_q(
+            "What search algorithm is best for finding a value in an unsorted array in O(n) time and O(1) space?",
+            "Linear search",
+            ["Binary search", "Jump search", "Interpolation search"],
+            "You can't do better than O(n) without extra structure.",
+            "Linear search is optimal for unsorted data with no extra space.",
+        ),
+        _practice_q(
+            "Which algorithm searches a sorted, rotated array in O(log n) time?",
+            "Modified binary search that determines which half is sorted",
+            ["Linear scan", "Two-pointer technique", "Hash map lookup"],
+            "Standard binary search doesn't handle rotation, but a modified version does.",
+            "Check which half is sorted, then decide which half contains the target.",
+        ),
+        _practice_q(
+            "What is the space complexity of recursive binary search?",
+            "O(log n) due to the call stack",
+            ["O(1)", "O(n)", "O(n log n)"],
+            "Each recursive call adds a frame to the stack.",
+            "The recursion depth is O(log n), so the stack space is O(log n).",
+        ),
+    ]
+    return [localize_step(s, language) for s in raw]
+
+
+# ------------------------------------------------------------------
+# PRACTICE TOPIC DISPATCHER
+# ------------------------------------------------------------------
+PRACTICE_QUESTION_BUILDERS: Dict[str, Dict[str, Dict]] = {
+    "for_loops":      {"easy": _practice_for_loops_easy,      "medium": _practice_for_loops_medium,      "hard": _practice_for_loops_hard},
+    "nested_loops":   {"easy": _practice_nested_loops_easy,   "medium": _practice_nested_loops_medium,   "hard": _practice_nested_loops_hard},
+    "while_loops":    {"easy": _practice_while_loops_easy,    "medium": _practice_while_loops_medium,    "hard": _practice_while_loops_hard},
+    "conditionals":   {"easy": _practice_conditionals_easy,   "medium": _practice_conditionals_medium,   "hard": _practice_conditionals_hard},
+    "functions":      {"easy": _practice_functions_easy,      "medium": _practice_functions_medium,      "hard": _practice_functions_hard},
+    "strings":        {"easy": _practice_strings_easy,        "medium": _practice_strings_medium,        "hard": _practice_strings_hard},
+    "lists":          {"easy": _practice_lists_easy,          "medium": _practice_lists_medium,          "hard": _practice_lists_hard},
+    "dicts":          {"easy": _practice_dicts_easy,          "medium": _practice_dicts_medium,          "hard": _practice_dicts_hard},
+    "sets":           {"easy": _practice_sets_easy,           "medium": _practice_sets_medium,           "hard": _practice_sets_hard},
+    "recursion":      {"easy": _practice_recursion_easy,      "medium": _practice_recursion_medium,      "hard": _practice_recursion_hard},
+    "oop":            {"easy": _practice_oop_easy,            "medium": _practice_oop_medium,            "hard": _practice_oop_hard},
+    "sorting":        {"easy": _practice_sorting_easy,        "medium": _practice_sorting_medium,        "hard": _practice_sorting_hard},
+    "searching":      {"easy": _practice_searching_easy,      "medium": _practice_searching_medium,      "hard": _practice_searching_hard},
+}
+
+
+def ask_practice_topic() -> tuple[str, str]:
+    """Returns (display_name, topic_key)."""
+    topic_list = list(PRACTICE_TOPICS.items())
+    print_panel(
+        "Choose a Practice Topic",
+        [f"  {color_text(str(i+1)+'.', BOLD, CYAN)} {name}" for i, (name, _) in enumerate(topic_list)],
+        accent=MAGENTA,
+    )
+    while True:
+        raw = input(color_text(f"Enter a number (1-{len(topic_list)}): ", BOLD)).strip()
+        if raw.isdigit() and 1 <= int(raw) <= len(topic_list):
+            idx = int(raw) - 1
+            display, key = topic_list[idx]
+            return display, key
+        print(color_text(f"Please enter a number between 1 and {len(topic_list)}.", YELLOW))
+
+
+def play_practice_mode() -> None:
+    print_banner("PRACTICE MODE", "Focused topic drills — 5 questions per session")
+
+    name = ask_player_name()
+    language = ask_language()
+    level = ask_level()
+
+    while True:
+        display_name, topic_key = ask_practice_topic()
+
+        builders = PRACTICE_QUESTION_BUILDERS.get(topic_key, {})
+        builder = builders.get(level)
+        if builder is None:
+            print(color_text("No questions available for that combination yet.", YELLOW))
+            continue
+
+        questions = builder(language)
+        random.shuffle(questions)
+        questions = questions[:5]
+
+        state = {
+            "score": 0,
+            "possible": 0,
+            "bonus": 0,
+            "streak": 0,
+            "hearts": STARTING_HEARTS,
+            "hints_used": 0,
+        }
+        category_stats: Dict[str, Dict[str, int]] = {}
+
+        lang_display = LANGUAGE_DISPLAY.get(language, language)
+        scenario = Scenario(
+            level=level,
+            category=display_name,
+            title=f"Practice: {display_name} ({lang_display})",
+            prompt=f"Practice drill — {display_name} — {level.title()} — {lang_display}",
+            steps=questions,
+        )
+
+        print_banner(f"Practice: {display_name}", f"Level: {level.title()}  |  Language: {lang_display}")
+        completed, _ = play_scenario(scenario, state, category_stats)
+
+        score = state["score"]
+        possible = state["possible"]
+        percent = round((score / possible) * 100, 1) if possible else 0
+
+        print_panel(
+            "Practice Session Summary",
+            [
+                f"Topic:    {color_text(display_name, BOLD, CYAN)}",
+                f"Level:    {level_badge(level)}",
+                f"Language: {color_text(lang_display, BOLD, MAGENTA)}",
+                f"Score:    {format_score(score, possible)}  ({color_text(f'{percent}%', BOLD, GREEN if percent >= 80 else YELLOW)})",
+                f"Hints:    {state['hints_used']}",
+                f"Hearts:   {hearts_text(state['hearts'])}",
+            ],
+            accent=GREEN,
+        )
+
+        if percent == 100:
+            print(color_text("Perfect score! You have mastered this topic at this level.", BOLD, GREEN))
+        elif percent >= 80:
+            print(color_text("Great work! Keep practicing to lock this in.", BOLD, CYAN))
+        elif percent >= 60:
+            print(color_text("Good effort. Review the explanations and try again.", BOLD, YELLOW))
+        else:
+            print(color_text("Keep going — read the explanations carefully and retry.", BOLD, RED))
+
+        leaderboard = update_leaderboard(
+            f"{name} [Practice:{display_name}]",
+            score,
+            possible,
+            level,
+            state["hints_used"],
+        )
+        print_leaderboard(leaderboard)
+
+        again = input(color_text("\nPractice another topic? (y/n): ", BOLD)).strip().lower()
+        if again != "y":
+            print(color_text("Returning to main menu.", BOLD, BLUE))
+            return
+
+
+# ===================================================================
+# MAIN MENU
+# ===================================================================
+
+def main_menu() -> None:
+    while True:
+        print_banner("WHITEBOARD INTERVIEW GAME", "Your coding interview practice companion")
+        print_panel(
+            "Main Menu",
+            [
+                f"  {color_text('1.', BOLD, CYAN)} Classic Mode  — 10 random interview scenarios",
+                f"  {color_text('2.', BOLD, CYAN)} Practice Mode — Choose a topic, drill 5 questions",
+                f"  {color_text('3.', BOLD, CYAN)} View Leaderboard",
+                f"  {color_text('4.', BOLD, RED)}  Quit",
+            ],
+            accent=MAGENTA,
+        )
+        choice = input(color_text("Enter 1, 2, 3, or 4: ", BOLD)).strip()
+        if choice == "1":
+            play_game()
+        elif choice == "2":
+            play_practice_mode()
+        elif choice == "3":
+            entries = load_leaderboard()
+            print_leaderboard(entries)
+            input(color_text("\nPress Enter to continue...", DIM))
+        elif choice == "4":
+            print(color_text("Goodbye!", BOLD, BLUE))
+            return
+        else:
+            print(color_text("Please enter 1, 2, 3, or 4.", YELLOW))
+
+
 if __name__ == "__main__":
-    play_game()
+    main_menu()

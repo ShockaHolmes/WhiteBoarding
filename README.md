@@ -13,6 +13,8 @@ Each scenario is broken into step-by-step multiple-choice questions with optiona
 
 - 10 random scenarios per session
 - Three difficulty levels
+- Separate question banks for Python, Java, and C#
+- 125 prepared scenarios per level for each language
 - Heart system (mistakes cost hearts)
 - Streak bonuses (+5 points every 3 correct answers in a row)
 - Per-category performance breakdown
@@ -89,5 +91,5 @@ Stored fields include:
 
 ## Notes
 
-- The game requires at least 100 prepared scenarios per selected level.
+- The game includes 125 prepared scenarios per selected level and language.
 - Scenario prompts and options are randomized to keep practice fresh.
