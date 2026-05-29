@@ -1,6 +1,22 @@
 [
   {
     "name": "Shocka",
+    "score": 540,
+    "possible": 500,
+    "percent": 108.0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Shocka",
+    "score": 530,
+    "possible": 500,
+    "percent": 106.0,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
+    "name": "Shocka",
     "score": 530,
     "possible": 500,
     "percent": 106.0,
@@ -40,6 +56,14 @@
     "hints_used": 0
   },
   {
+    "name": "Shocka [Practice:If / Else (Conditionals)]",
+    "score": 10,
+    "possible": 30,
+    "percent": 33.3,
+    "level": "easy",
+    "hints_used": 0
+  },
+  {
     "name": "Shocka [Practice:Nested Loops]",
     "score": 10,
     "possible": 50,
@@ -52,30 +76,6 @@
     "score": 0,
     "possible": 0,
     "percent": 0,
-    "level": "easy",
-    "hints_used": 0
-  },
-  {
-    "name": "Shocka [CodeWrite:For Loops]",
-    "score": 0,
-    "possible": 20,
-    "percent": 0.0,
-    "level": "easy",
-    "hints_used": 0
-  },
-  {
-    "name": "Tester [CodeWrite:Nested Loops]",
-    "score": 0,
-    "possible": 10,
-    "percent": 0.0,
-    "level": "easy",
-    "hints_used": 0
-  },
-  {
-    "name": "Tester [CodeWrite:Nested Loops]",
-    "score": 0,
-    "possible": 10,
-    "percent": 0.0,
     "level": "easy",
     "hints_used": 0
   }

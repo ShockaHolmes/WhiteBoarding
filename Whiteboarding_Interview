@@ -625,6 +625,272 @@ def _code_answer_matches(user_answer: str, correct_answer: str) -> bool:
     return False
 
 
+def _extract_function_signature(problem_text: str) -> Optional[tuple[str, str]]:
+    match = re.search(r"(?:function|method) named\s+([A-Za-z_][A-Za-z0-9_]*)\(([^)]*)\)", problem_text, re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1), match.group(2).strip()
+
+
+def _project_solution_lines(problem_text: str) -> List[str]:
+    signature = _extract_function_signature(problem_text)
+    if not signature:
+        return []
+
+    func_name, params = signature
+    if re.search(r"method named", problem_text, re.IGNORECASE):
+        lines: List[str] = [f"{func_name}({params}) {{"]
+    else:
+        lines = [f"def {func_name}({params}):"]
+    lower = problem_text.lower()
+
+    add_match = re.search(r"returns\s+n\s*\+\s*(\d+)", lower)
+    if add_match:
+        lines.append(f"    return n + {add_match.group(1)}")
+        return lines
+
+    if "returns true if n is even" in lower:
+        lines.append("    return n % 2 == 0")
+    elif "returns the first character" in lower:
+        lines.append("    return text[0]")
+    elif "returns how many items are in the list" in lower:
+        lines.append("    return len(items)")
+    elif "hello," in lower and "followed by the name" in lower:
+        lines.append("    return 'Hello, ' + name")
+    elif "returns the square of n" in lower:
+        lines.append("    return n * n")
+    elif "returns the last character" in lower:
+        lines.append("    return text[-1]")
+    elif "greater than 0" in lower:
+        lines.append("    return n > 0")
+    elif "how many vowels" in lower:
+        lines.extend([
+            "    count = 0",
+            "    for ch in text:",
+            "        if ch.lower() in 'aeiou':",
+            "            count += 1",
+            "    return count",
+        ])
+    elif "sum of only the even numbers" in lower:
+        lines.extend([
+            "    total = 0",
+            "    for num in nums:",
+            "        if num % 2 == 0:",
+            "            total += num",
+            "    return total",
+        ])
+    elif "largest value in a non-empty list" in lower:
+        lines.extend([
+            "    best = nums[0]",
+            "    for num in nums[1:]:",
+            "        if num > best:",
+            "            best = num",
+            "    return best",
+        ])
+    elif "how many times target appears" in lower:
+        lines.extend([
+            "    count = 0",
+            "    for num in nums:",
+            "        if num == target:",
+            "            count += 1",
+            "    return count",
+        ])
+    elif "returns the reversed string" in lower:
+        lines.extend([
+            "    result = ''",
+            "    for ch in text:",
+            "        result = ch + result",
+            "    return result",
+        ])
+    elif "palindrome" in lower:
+        lines.append("    return text == text[::-1]")
+    elif "only odd numbers" in lower:
+        lines.extend([
+            "    result = []",
+            "    for num in nums:",
+            "        if num % 2 != 0:",
+            "            result.append(num)",
+            "    return result",
+        ])
+    elif "number of words" in lower:
+        lines.append("    return len(text.split())")
+    elif "duplicate value" in lower:
+        lines.extend([
+            "    seen = set()",
+            "    for num in nums:",
+            "        if num in seen:",
+            "            return True",
+            "        seen.add(num)",
+            "    return False",
+        ])
+    else:
+        lines.append("    # Write logic here")
+
+    return lines
+
+
+def _read_multiline_answer() -> str:
+    print(color_text("Enter code lines. Type END on its own line when finished.", DIM, CYAN))
+    lines: List[str] = []
+    while True:
+        line = input("... ")
+        if line.strip().upper() == "END":
+            break
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def _next_line_suggestion(problem_text: str, draft: str) -> str:
+    solution_lines = _project_solution_lines(problem_text)
+    if not solution_lines:
+        return "Start with a valid function header, then add the core return/loop logic."
+
+    draft_lines = [line.rstrip() for line in draft.splitlines() if line.strip()]
+    if not draft_lines:
+        return solution_lines[0]
+
+    normalized_draft = [re.sub(r"\s+", " ", line.strip().lower()) for line in draft_lines]
+    normalized_solution = [re.sub(r"\s+", " ", line.strip().lower()) for line in solution_lines]
+
+    prefix = 0
+    for i in range(min(len(normalized_draft), len(normalized_solution))):
+        if normalized_draft[i] == normalized_solution[i]:
+            prefix += 1
+        else:
+            break
+
+    if prefix < len(solution_lines):
+        return solution_lines[prefix]
+
+    return "You already have the full solution shape. Run a quick test call next."
+
+
+def _matches_project_solution(user_answer: str, problem_text: str) -> bool:
+    solution_lines = _project_solution_lines(problem_text)
+    if len(solution_lines) < 2:
+        return False
+
+    normalized_user = _normalize_code_answer(user_answer)
+    for line in solution_lines[:2]:
+        if _normalize_code_answer(line) not in normalized_user:
+            return False
+    return True
+
+
+def _sample_run_for_problem(problem_text: str) -> Optional[tuple[str, str, str]]:
+    lower = problem_text.lower()
+
+    add_match = re.search(r"returns\s+n\s*\+\s*(\d+)", lower)
+    if add_match:
+        delta = int(add_match.group(1))
+        return ("4", str(4 + delta), "Add the delta to n.")
+
+    if "returns true if n is even" in lower:
+        return ("8", "True", "8 is divisible by 2.")
+    if "returns the first character" in lower:
+        return ("'code'", "'c'", "Index 0 is the first character.")
+    if "returns how many items are in the list" in lower:
+        return ("[3, 5, 7]", "3", "The list contains three items.")
+    if "hello," in lower and "followed by the name" in lower:
+        return ("'Ada'", "'Hello, Ada'", "Concatenate greeting and name.")
+    if "returns the square of n" in lower:
+        return ("5", "25", "Square is n multiplied by itself.")
+    if "returns the last character" in lower:
+        return ("'code'", "'e'", "Index -1 is the last character.")
+    if "greater than 0" in lower:
+        return ("-2", "False", "-2 is not positive.")
+    if "how many vowels" in lower:
+        return ("'banana'", "3", "a, a, a are vowels.")
+    if "sum of only the even numbers" in lower:
+        return ("[1, 2, 3, 4]", "6", "Only 2 and 4 are added.")
+    if "largest value in a non-empty list" in lower:
+        return ("[4, 9, 1]", "9", "9 is the largest value.")
+    if "how many times target appears" in lower:
+        return ("[2, 1, 2, 2], 2", "3", "Target appears three times.")
+    if "returns the reversed string" in lower:
+        return ("'cat'", "'tac'", "Characters are reversed.")
+    if "palindrome" in lower:
+        return ("'level'", "True", "Reads the same forward and backward.")
+    if "only odd numbers" in lower:
+        return ("[1, 2, 3, 4, 5]", "[1, 3, 5]", "Keep values with odd remainder.")
+    if "number of words" in lower:
+        return ("'we love code'", "3", "There are three space-separated words.")
+    if "duplicate value" in lower:
+        return ("[5, 1, 5]", "True", "5 appears more than once.")
+
+    return None
+
+
+def _format_args_for_language(sample_args: str, language: str) -> str:
+    if language == "python":
+        return sample_args
+
+    localized = re.sub(r"'([^']*)'", r'"\1"', sample_args)
+
+    def repl(match: re.Match) -> str:
+        values = [v.strip() for v in match.group(1).split(",") if v.strip()]
+        if not values:
+            return "new int[] {}"
+        if all(re.fullmatch(r"-?\d+", v) for v in values):
+            return f"new int[] {{ {', '.join(values)} }}"
+        return match.group(0)
+
+    return re.sub(r"\[([^\[\]]*)\]", repl, localized)
+
+
+def _format_expected_for_language(expected_output: str, language: str) -> str:
+    if language == "python":
+        return expected_output
+
+    localized = expected_output.replace("True", "true").replace("False", "false")
+    localized = re.sub(r"'([^']*)'", r'"\1"', localized)
+
+    list_match = re.fullmatch(r"\[([^\[\]]*)\]", expected_output.strip())
+    if list_match:
+        values = [v.strip() for v in list_match.group(1).split(",") if v.strip()]
+        if not values:
+            return "new int[] {}"
+        if all(re.fullmatch(r"-?\d+", v) for v in values):
+            return f"new int[] {{ {', '.join(values)} }}"
+
+    return localized
+
+
+def _build_sample_call(problem_text: str, sample_args: str, language: str) -> str:
+    signature = _extract_function_signature(problem_text)
+    args_text = _format_args_for_language(sample_args, language)
+    if not signature:
+        return args_text
+
+    func_name, _ = signature
+    if language == "python":
+        return f"{func_name}({args_text})"
+    return f"{func_name}({args_text});"
+
+
+def print_codewrite_test_prompt(scenario: Scenario, language: str) -> None:
+    sample = _sample_run_for_problem(scenario.prompt)
+    if not sample:
+        return
+
+    sample_args, expected_output, reasoning = sample
+    sample_call = _build_sample_call(scenario.prompt, sample_args, language)
+    expected_display = _format_expected_for_language(expected_output, language)
+    print_panel(
+        "Run/Test Check",
+        [
+            f"Sample Call:     {color_text(sample_call, BOLD, CYAN)}",
+            f"Expected Output: {color_text(expected_display, BOLD, GREEN)}",
+            f"Why:             {reasoning}",
+        ],
+        accent=BLUE,
+    )
+
+    confirmation = input(color_text("Did your code produce the expected output? (y/n): ", BOLD)).strip().lower()
+    if confirmation == "n":
+        print(color_text("Use N in the next step to get a next-line suggestion from your current draft.", BOLD, YELLOW))
+
+
 def ask_step_code(step: StepQuestion, scenario_prompt: str) -> tuple[bool, int, bool]:
     hint_count = 0
     used_hint_once = False
@@ -640,10 +906,11 @@ def ask_step_code(step: StepQuestion, scenario_prompt: str) -> tuple[bool, int, 
     clue_text = ", ".join(clue_words) if clue_words else step.hint
     print(color_text(f"Clue in question: {step.hint}", DIM, CYAN))
     print(color_text(f"Keyword clue: {clue_text}", DIM, CYAN))
+    print(color_text("Commands: H=hint, N=next line help, M=multiline code, Q=quit/save", DIM, CYAN))
     print()
 
     while True:
-        answer = input("Write your code answer (H for hint, Q to quit/save): ").strip()
+        answer = input("Write your code answer (H/N/M/Q): ").strip()
         upper = answer.upper()
         if upper == "Q":
             return False, hint_count, True
@@ -654,11 +921,21 @@ def ask_step_code(step: StepQuestion, scenario_prompt: str) -> tuple[bool, int, 
                 hint_count += 1
                 used_hint_once = True
             continue
+        if upper == "N":
+            draft = _read_multiline_answer()
+            suggestion = _next_line_suggestion(scenario_prompt, draft)
+            print(f"\nNext line suggestion: {color_text(suggestion, BOLD, GREEN)}\n")
+            if not used_hint_once:
+                hint_count += 1
+                used_hint_once = True
+            continue
+        if upper == "M":
+            answer = _read_multiline_answer()
         if not answer:
-            print("\nPlease type an answer, H, or Q.\n")
+            print("\nPlease type an answer, or use H/N/M/Q.\n")
             continue
 
-        is_correct = _code_answer_matches(answer, correct_answer)
+        is_correct = _code_answer_matches(answer, correct_answer) or _matches_project_solution(answer, scenario_prompt)
         if is_correct:
             print(f"\n{GREEN}Correct.{RESET}")
         else:
@@ -883,6 +1160,132 @@ def build_easy_greet(func_name: str) -> Scenario:
     return Scenario("easy", "Strings", "Greeting", prompt, steps)
 
 
+def build_easy_square(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(n) that returns the square of n."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + arithmetic",
+            ["Class design", "String slicing", "Graph traversal"],
+            "You are taking one number and computing a math result.",
+            "This is a function with arithmetic."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The prompt asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) What data type should n be?",
+            "int",
+            ["str", "list", "dict"],
+            "Squaring is numeric arithmetic.",
+            "n should be an integer."
+        ),
+        make_step(
+            "4) Which function header is correct?",
+            f"def {func_name}(n):",
+            [f"class {func_name}(n):", f"def {func_name}:", f"def {func_name}(n)"],
+            "Pick the valid function definition with a colon.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "5) Which line belongs inside the function?",
+            "return n * n",
+            ["print(n * n)", "return n + n", "return n**"],
+            "Square means multiplying a number by itself.",
+            "n * n returns the square of n."
+        ),
+    ]
+    return Scenario("easy", "Math", "Square Number", prompt, steps)
+
+
+def build_easy_last_char(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(text) that returns the last character of the string."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + strings",
+            ["Class inheritance", "File I/O", "Dynamic programming"],
+            "You are accessing characters from a string.",
+            "This is a string function."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The task asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) What data type should text be?",
+            "str",
+            ["int", "list", "dict"],
+            "A character sequence is a string.",
+            "text should be a str."
+        ),
+        make_step(
+            "4) Which function header is correct?",
+            f"def {func_name}(text):",
+            [f"def {func_name}:", f"def {func_name}(text)", f"class {func_name}(text):"],
+            "Look for def + name + parameter + colon.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "5) Which line belongs inside the function?",
+            "return text[-1]",
+            ["return text[1]", "print(text[-1])", "return text( -1 )"],
+            "Negative index -1 points to the last item.",
+            "text[-1] returns the last character."
+        ),
+    ]
+    return Scenario("easy", "Strings", "Last Character", prompt, steps)
+
+
+def build_easy_is_positive(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(n) that returns True if n is greater than 0, otherwise False."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + conditionals",
+            ["Class design", "Sorting only", "String formatting"],
+            "You are returning True or False from a comparison.",
+            "This is a function with conditional logic."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The prompt asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) What data type should n be?",
+            "int",
+            ["str", "list", "dict"],
+            "You are comparing a numeric value to 0.",
+            "n should be an integer."
+        ),
+        make_step(
+            "4) Which function header is correct?",
+            f"def {func_name}(n):",
+            [f"class {func_name}(n):", f"def {func_name}:", f"def {func_name}(n)"],
+            "Pick the valid Python function definition.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "5) Which line best solves the problem?",
+            "return n > 0",
+            ["return n >= 0", "print(n > 0)", "return n < 0"],
+            "Positive means strictly greater than zero.",
+            "n > 0 is True only for positive numbers."
+        ),
+    ]
+    return Scenario("easy", "Conditionals", "Positive Check", prompt, steps)
+
+
 def generate_easy_pool() -> List[Scenario]:
     pool = []
 
@@ -905,6 +1308,18 @@ def generate_easy_pool() -> List[Scenario]:
     greet_names = [f"greet_user_{i}" for i in range(1, 26)]
     for name in greet_names:
         pool.append(build_easy_greet(name))
+
+    square_names = [f"square_num_{i}" for i in range(1, 26)]
+    for name in square_names:
+        pool.append(build_easy_square(name))
+
+    last_char_names = [f"last_char_{i}" for i in range(1, 26)]
+    for name in last_char_names:
+        pool.append(build_easy_last_char(name))
+
+    positive_names = [f"is_positive_{i}" for i in range(1, 26)]
+    for name in positive_names:
+        pool.append(build_easy_is_positive(name))
 
     return pool
 
@@ -936,6 +1351,18 @@ def generate_easy_pool_for_language(language: str) -> List[Scenario]:
     greet_names = [f"{suffix}_greet_user_{i}" for i in range(1, 26)]
     for name in greet_names:
         pool.append(localize_scenario(build_easy_greet(name), language))
+
+    square_names = [f"{suffix}_square_num_{i}" for i in range(1, 26)]
+    for name in square_names:
+        pool.append(localize_scenario(build_easy_square(name), language))
+
+    last_char_names = [f"{suffix}_last_char_{i}" for i in range(1, 26)]
+    for name in last_char_names:
+        pool.append(localize_scenario(build_easy_last_char(name), language))
+
+    positive_names = [f"{suffix}_is_positive_{i}" for i in range(1, 26)]
+    for name in positive_names:
+        pool.append(localize_scenario(build_easy_is_positive(name), language))
 
     return pool
 
@@ -1224,6 +1651,174 @@ def build_medium_reverse_string(func_name: str) -> Scenario:
     return Scenario("medium", "Strings", "Reverse String", prompt, steps)
 
 
+def build_medium_palindrome(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(text) that returns True if text is a palindrome, otherwise False."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + strings + conditionals",
+            ["Class inheritance", "Heap operations", "SQL joins"],
+            "You compare string content and return a boolean.",
+            "This is a string + conditional function problem."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The prompt asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(text):",
+            [f"def {func_name}:", f"class {func_name}(text):", f"def {func_name}(text)"],
+            "A valid function header must include the parameter and a colon.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "4) Which expression builds the reversed text?",
+            "text[::-1]",
+            ["text[-1]", "reversed(text)", "text.reverse()"],
+            "String slicing with step -1 makes a reversed copy.",
+            "text[::-1] returns a reversed string."
+        ),
+        make_step(
+            "5) Which line correctly compares palindrome condition?",
+            "return text == text[::-1]",
+            ["return text = text[::-1]", "print(text == text[::-1])", "return text != text[::-1]"],
+            "A palindrome reads the same forward and backward.",
+            "Direct equality against the reversed string solves it."
+        ),
+        make_step(
+            "6) What is the return type conceptually?",
+            "bool",
+            ["int", "list", "dict"],
+            "The result is True/False.",
+            "Palindrome checks produce booleans."
+        ),
+        make_step(
+            "7) Why is printing not ideal here?",
+            "Functions should return values for callers to use",
+            ["Printing is faster", "Printing changes string order", "Printing avoids comparisons"],
+            "Interview helpers should return reusable outputs.",
+            "Returning allows the caller to reuse the boolean result."
+        ),
+    ]
+    return Scenario("medium", "Strings", "Palindrome Check", prompt, steps)
+
+
+def build_medium_filter_odds(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(nums) that returns a new list containing only odd numbers from nums."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + lists + loops + conditionals",
+            ["Class design", "Binary tree recursion", "Regular expressions only"],
+            "You iterate through a list and keep values that meet a condition.",
+            "This is list filtering with loop + conditional logic."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The prompt asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(nums):",
+            [f"def {func_name}:", f"class {func_name}(nums):", f"def {func_name}(nums)"],
+            "Choose the valid function definition format.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "4) What variable should you initialize first?",
+            "result = []",
+            ["result = 0", "result = ''", "result = None"],
+            "You are building a new list of selected values.",
+            "An empty list is the right accumulator."
+        ),
+        make_step(
+            "5) Which loop belongs in the function?",
+            "for num in nums:",
+            ["for num in range(nums):", "while nums:", "for nums in num:"],
+            "You need to inspect each number in the list.",
+            "This iterates each list element."
+        ),
+        make_step(
+            "6) Which update logic is correct?",
+            "if num % 2 != 0: result.append(num)",
+            ["if num % 2 == 0: result.append(num)", "result.append(nums)", "if num in result: num += 1"],
+            "Odd numbers leave remainder 1 when divided by 2.",
+            "This keeps only odd numbers in result."
+        ),
+        make_step(
+            "7) How should the function finish?",
+            "return result",
+            ["print(result)", "return nums", "return num"],
+            "Return the filtered list so callers can use it.",
+            "result contains the odd numbers."
+        ),
+    ]
+    return Scenario("medium", "Lists", "Filter Odds", prompt, steps)
+
+
+def build_medium_word_count(func_name: str) -> Scenario:
+    prompt = f"Write a function named {func_name}(text) that returns the number of words in text, assuming words are separated by spaces."
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Function + strings",
+            ["Class design", "Sorting only", "Graph search"],
+            "You are processing text and computing a count.",
+            "This is a string processing function."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The task asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(text):",
+            [f"class {func_name}(text):", f"def {func_name}:", f"def {func_name}(text)"],
+            "Select the valid Python function header.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "4) Which expression splits text into words?",
+            "text.split()",
+            ["text.slice()", "text.words()", "split(text, ' ')"],
+            "split() breaks a string on whitespace by default.",
+            "text.split() returns a list of words."
+        ),
+        make_step(
+            "5) Which line returns the word count?",
+            "return len(text.split())",
+            ["return text.split()", "print(len(text.split()))", "return len(text)"],
+            "Count the number of split pieces, not characters.",
+            "len(text.split()) gives the number of words."
+        ),
+        make_step(
+            "6) What should the function return for an empty string?",
+            "0",
+            ["1", "None", "-1"],
+            "Splitting an empty string yields no words.",
+            "No words means count 0."
+        ),
+        make_step(
+            "7) Why return instead of print?",
+            "Return values are reusable by other code",
+            ["Print is required in functions", "Print avoids string splitting", "Return only works with numbers"],
+            "Interview functions should be reusable in tests and callers.",
+            "Returning makes the result programmatically usable."
+        ),
+    ]
+    return Scenario("medium", "Strings", "Word Count", prompt, steps)
+
+
 def generate_medium_pool() -> List[Scenario]:
     pool = []
 
@@ -1233,6 +1828,9 @@ def generate_medium_pool() -> List[Scenario]:
         pool.append(build_medium_find_max(f"find_max_{i}"))
         pool.append(build_medium_count_target(f"count_target_{i}"))
         pool.append(build_medium_reverse_string(f"reverse_text_{i}"))
+        pool.append(build_medium_palindrome(f"is_palindrome_{i}"))
+        pool.append(build_medium_filter_odds(f"filter_odds_{i}"))
+        pool.append(build_medium_word_count(f"word_count_{i}"))
 
     return pool
 
@@ -1250,6 +1848,9 @@ def generate_medium_pool_for_language(language: str) -> List[Scenario]:
         pool.append(localize_scenario(build_medium_find_max(f"{suffix}_find_max_{i}"), language))
         pool.append(localize_scenario(build_medium_count_target(f"{suffix}_count_target_{i}"), language))
         pool.append(localize_scenario(build_medium_reverse_string(f"{suffix}_reverse_text_{i}"), language))
+        pool.append(localize_scenario(build_medium_palindrome(f"{suffix}_is_palindrome_{i}"), language))
+        pool.append(localize_scenario(build_medium_filter_odds(f"{suffix}_filter_odds_{i}"), language))
+        pool.append(localize_scenario(build_medium_word_count(f"{suffix}_word_count_{i}"), language))
 
     return pool
 
@@ -1641,6 +2242,145 @@ def build_hard_has_duplicate(func_name: str) -> Scenario:
     return Scenario("hard", "Sets", "Has Duplicate", prompt, steps)
 
 
+def build_hard_merge_sorted(func_name: str) -> Scenario:
+    prompt = (
+        f"Write a function named {func_name}(a, b) that merges two sorted lists into one sorted list "
+        f"in O(len(a) + len(b)) time."
+    )
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Two pointers + arrays",
+            ["Class inheritance", "String parsing", "Database joins"],
+            "You combine two already sorted sequences efficiently.",
+            "This is a two-pointer array merge pattern."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The prompt asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which function header is correct?",
+            f"def {func_name}(a, b):",
+            [f"def {func_name}(a):", f"class {func_name}(a, b):", f"def {func_name}(a, b)"],
+            "Both lists are required parameters.",
+            "That is the correct function header."
+        ),
+        make_step(
+            "4) Which setup is best before looping?",
+            "i = j = 0; result = []",
+            ["i = j = 1; result = 0", "result = ''", "i = len(a); j = len(b)"],
+            "Pointers should start at the first elements.",
+            "Start both indices at 0 and accumulate into a list."
+        ),
+        make_step(
+            "5) What should the main loop condition be?",
+            "while i < len(a) and j < len(b):",
+            ["while i <= len(a) and j <= len(b):", "while a and b:", "for i in a and j in b:"],
+            "Continue while both pointers are still in range.",
+            "This loop compares current values from both lists safely."
+        ),
+        make_step(
+            "6) Which comparison/update logic is correct?",
+            "if a[i] <= b[j]: result.append(a[i]); i += 1\nelse: result.append(b[j]); j += 1",
+            ["if a[i] >= b[j]: append a[i] always", "result.append(a[i]); result.append(b[j]); i+=1; j+=1", "if a[i] == b[j]: return []"],
+            "Append the smaller current value, then move that pointer.",
+            "This keeps output sorted and runs in linear time."
+        ),
+        make_step(
+            "7) How should leftover items be handled?",
+            "result.extend(a[i:]); result.extend(b[j:])",
+            ["Ignore leftovers", "Reset i and j to 0", "Sort result again at the end"],
+            "After one list ends, append the rest of the other list.",
+            "Remaining suffixes are already sorted and can be appended directly."
+        ),
+        make_step(
+            "8) How should the function finish?",
+            "return result",
+            ["print(result)", "return a + b", "return i + j"],
+            "Return the merged list for caller use.",
+            "result is the merged sorted output."
+        ),
+        make_step(
+            "9) What is the time complexity?",
+            "O(len(a) + len(b))",
+            ["O(n^2)", "O(log n)", "O(1)"],
+            "Each element is visited at most once.",
+            "The merge does a single linear pass across both lists."
+        ),
+    ]
+    return Scenario("hard", "Arrays", "Merge Sorted Lists", prompt, steps)
+
+
+def build_hard_longest_streak(func_name: str) -> Scenario:
+    prompt = (
+        f"Write a function named {func_name}(nums) that returns the length of the longest consecutive "
+        f"integer streak in nums in O(n) average time."
+    )
+    steps = [
+        make_step(
+            "1) What type of problem is this?",
+            "Hash set + sequence scan",
+            ["Class design", "String reversal", "Binary heap only"],
+            "You need fast membership checks for neighboring values.",
+            "A hash set enables O(1) average lookups."
+        ),
+        make_step(
+            "2) What should go first in the solution?",
+            "def",
+            ["class", "str", "int"],
+            "The prompt asks for a function.",
+            "Use def first."
+        ),
+        make_step(
+            "3) Which setup is most useful?",
+            "num_set = set(nums)",
+            ["num_set = []", "num_set = {}", "num_set = tuple(nums)"],
+            "Set membership checks are fast and remove duplicates.",
+            "A set supports O(1) average lookup for consecutive checks."
+        ),
+        make_step(
+            "4) When should you start expanding a streak from number n?",
+            "Only if n - 1 is not in num_set",
+            ["Only if n + 1 is not in num_set", "Only if n is even", "Always for every n"],
+            "Start only at sequence beginnings to avoid repeated work.",
+            "Checking n-1 ensures each streak is expanded once."
+        ),
+        make_step(
+            "5) Which loop grows the current streak?",
+            "while current + 1 in num_set: current += 1; length += 1",
+            ["while current in num_set: length += current", "for current in num_set: current += 1", "while current - 1 in num_set: current -= 1"],
+            "Advance forward while the next value exists.",
+            "This counts consecutive values in the streak."
+        ),
+        make_step(
+            "6) Which variable tracks the best answer?",
+            "best = max(best, length)",
+            ["best += length", "best = length + 1 always", "length = best"],
+            "Keep the largest streak length seen so far.",
+            "max preserves the global best across all starts."
+        ),
+        make_step(
+            "7) What should be returned?",
+            "best",
+            ["num_set", "length", "nums"],
+            "The prompt asks for streak length, not the streak values.",
+            "best stores the longest consecutive length."
+        ),
+        make_step(
+            "8) What is the average-case time complexity?",
+            "O(n)",
+            ["O(n log n)", "O(n^2)", "O(log n)"],
+            "Each number is processed a constant number of times on average.",
+            "With hash set lookups, the algorithm is linear on average."
+        ),
+    ]
+    return Scenario("hard", "Hashing", "Longest Consecutive Streak", prompt, steps)
+
+
 def generate_hard_pool() -> List[Scenario]:
     pool = []
 
@@ -1650,6 +2390,8 @@ def generate_hard_pool() -> List[Scenario]:
         pool.append(build_hard_binary_search(f"binary_search_{i}"))
         pool.append(build_hard_valid_parentheses(f"is_balanced_{i}"))
         pool.append(build_hard_has_duplicate(f"has_duplicate_{i}"))
+        pool.append(build_hard_merge_sorted(f"merge_sorted_{i}"))
+        pool.append(build_hard_longest_streak(f"longest_streak_{i}"))
 
     return pool
 
@@ -1668,6 +2410,8 @@ def generate_hard_pool_for_language(language: str) -> List[Scenario]:
         pool.append(localize_scenario(build_hard_binary_search(f"{suffix}_binary_search_{i}"), language))
         pool.append(localize_scenario(build_hard_valid_parentheses(f"{suffix}_is_balanced_{i}"), language))
         pool.append(localize_scenario(build_hard_has_duplicate(f"{suffix}_has_duplicate_{i}"), language))
+        pool.append(localize_scenario(build_hard_merge_sorted(f"{suffix}_merge_sorted_{i}"), language))
+        pool.append(localize_scenario(build_hard_longest_streak(f"{suffix}_longest_streak_{i}"), language))
 
     return pool
 
@@ -1678,6 +2422,103 @@ def get_pool(level: str, language: str = "python") -> List[Scenario]:
     elif level == "medium":
         return generate_medium_pool_for_language(language)
     return generate_hard_pool_for_language(language)
+
+
+def _title_stem(title: str) -> str:
+    return re.sub(r"\s+\d+$", "", title).strip().lower()
+
+
+def choose_diverse_scenarios(pool: List[Scenario], count: int) -> List[int]:
+    if count <= 0 or not pool:
+        return []
+    if count >= len(pool):
+        return list(range(len(pool)))
+
+    category_buckets: Dict[str, List[int]] = {}
+    for index, scenario in enumerate(pool):
+        category_buckets.setdefault(scenario.category, []).append(index)
+
+    for indices in category_buckets.values():
+        random.shuffle(indices)
+
+    category_order = list(category_buckets.keys())
+    random.shuffle(category_order)
+
+    # Build an even per-category quota for this session.
+    base_quota = count // len(category_order)
+    extra_slots = count % len(category_order)
+    category_quota: Dict[str, int] = {}
+    for i, category in enumerate(category_order):
+        category_quota[category] = base_quota + (1 if i < extra_slots else 0)
+
+    # If a category cannot satisfy its quota, redistribute the deficit.
+    deficit = 0
+    for category in category_order:
+        cap = len(category_buckets[category])
+        if category_quota[category] > cap:
+            deficit += category_quota[category] - cap
+            category_quota[category] = cap
+
+    while deficit > 0:
+        moved = False
+        for category in category_order:
+            if deficit == 0:
+                break
+            cap = len(category_buckets[category])
+            if category_quota[category] < cap:
+                category_quota[category] += 1
+                deficit -= 1
+                moved = True
+        if not moved:
+            break
+
+    selected: List[int] = []
+    selected_set: set[int] = set()
+    title_counts: Dict[str, int] = {}
+    max_per_title = 2
+
+    # First pass: satisfy category quotas while limiting repeated title stems.
+    for category in category_order:
+        need = category_quota[category]
+        bucket = category_buckets[category]
+        for candidate in bucket:
+            if need == 0:
+                break
+            if candidate in selected_set:
+                continue
+
+            stem = _title_stem(pool[candidate].title)
+            if title_counts.get(stem, 0) >= max_per_title:
+                continue
+
+            selected.append(candidate)
+            selected_set.add(candidate)
+            title_counts[stem] = title_counts.get(stem, 0) + 1
+            need -= 1
+
+    # Second pass: if title limits blocked quota completion, fill remaining quota slots.
+    for category in category_order:
+        if len(selected) >= count:
+            break
+        need = max(0, category_quota[category] - sum(1 for i in selected if pool[i].category == category))
+        if need == 0:
+            continue
+        for candidate in category_buckets[category]:
+            if need == 0:
+                break
+            if candidate in selected_set:
+                continue
+            selected.append(candidate)
+            selected_set.add(candidate)
+            need -= 1
+
+    if len(selected) < count:
+        remaining = [i for i in range(len(pool)) if i not in selected_set]
+        random.shuffle(remaining)
+        selected.extend(remaining[:count - len(selected)])
+
+    random.shuffle(selected)
+    return selected
 
 
 def play_scenario(
@@ -1812,7 +2653,7 @@ def play_game() -> None:
         pool = get_pool(level, language)
         if len(pool) < 100:
             raise ValueError(f"{level} level must have at least 100 prepared scenarios.")
-        selected_indices = random.sample(range(len(pool)), SESSION_SCENARIOS)
+        selected_indices = choose_diverse_scenarios(pool, SESSION_SCENARIOS)
         scenario_position = 0
         step_position = 0
 
@@ -1822,7 +2663,7 @@ def play_game() -> None:
             raise ValueError(f"{level} level must have at least 100 prepared scenarios.")
 
         if len(selected_indices) != SESSION_SCENARIOS:
-            selected_indices = random.sample(range(len(pool)), SESSION_SCENARIOS)
+            selected_indices = choose_diverse_scenarios(pool, SESSION_SCENARIOS)
             scenario_position = 0
             step_position = 0
 
@@ -3682,24 +4523,19 @@ def play_practice_mode() -> None:
 
 
 def play_code_mode() -> None:
-    print_banner("CODE WRITE MODE", "Type each code answer from scratch")
+    print_banner("CODE WRITE MODE", "Build full interview solutions with line-by-line coaching")
 
     name = ask_player_name()
     language = ask_language()
     level = ask_level()
 
     while True:
-        display_name, topic_key = ask_practice_topic()
+        pool = get_pool(level, language)
+        if len(pool) < 100:
+            raise ValueError(f"{level} level must have at least 100 prepared scenarios.")
 
-        builders = PRACTICE_QUESTION_BUILDERS.get(topic_key, {})
-        builder = builders.get(level)
-        if builder is None:
-            print(color_text("No questions available for that combination yet.", YELLOW))
-            continue
-
-        questions = builder(language)
-        random.shuffle(questions)
-        questions = questions[:5]
+        selected_indices = choose_diverse_scenarios(pool, 5)
+        selected = [pool[i] for i in selected_indices]
 
         state = {
             "score": 0,
@@ -3712,16 +4548,24 @@ def play_code_mode() -> None:
         category_stats: Dict[str, Dict[str, int]] = {}
 
         lang_display = LANGUAGE_DISPLAY.get(language, language)
-        scenario = Scenario(
-            level=level,
-            category=display_name,
-            title=f"Code Write: {display_name} ({lang_display})",
-            prompt=f"Code write drill — {display_name} — {level.title()} — {lang_display}",
-            steps=questions,
+        print_banner("Code Write Session", f"Level: {level.title()}  |  Language: {lang_display}")
+        print_panel(
+            "How To Use This Mode",
+            [
+                "Solve each scenario as if writing production code.",
+                "Use M to enter multi-line code blocks.",
+                "Use N anytime to get a suggested next line from your current draft.",
+            ],
+            accent=CYAN,
         )
 
-        print_banner(f"Code Write: {display_name}", f"Level: {level.title()}  |  Language: {lang_display}")
-        completed, _ = play_scenario(scenario, state, category_stats, answer_handler=ask_step_code)
+        for i, scenario in enumerate(selected, start=1):
+            print_banner(f"Code Scenario {i} of {len(selected)}")
+            completed, _ = play_scenario(scenario, state, category_stats, answer_handler=ask_step_code)
+            if not completed:
+                print(color_text("Code Write session ended early. Returning to main menu.", BOLD, YELLOW))
+                return
+            print_codewrite_test_prompt(scenario, language)
 
         score = state["score"]
         possible = state["possible"]
@@ -3730,7 +4574,6 @@ def play_code_mode() -> None:
         print_panel(
             "Code Write Session Summary",
             [
-                f"Topic:    {color_text(display_name, BOLD, CYAN)}",
                 f"Level:    {level_badge(level)}",
                 f"Language: {color_text(lang_display, BOLD, MAGENTA)}",
                 f"Score:    {format_score(score, possible)}  ({color_text(f'{percent}%', BOLD, GREEN if percent >= 80 else YELLOW)})",
@@ -3750,15 +4593,16 @@ def play_code_mode() -> None:
             print(color_text("Keep practicing. Writing each answer builds stronger retention.", BOLD, RED))
 
         leaderboard = update_leaderboard(
-            f"{name} [CodeWrite:{display_name}]",
+            f"{name} [CodeWrite:{level}]",
             score,
             possible,
             level,
             state["hints_used"],
         )
         print_leaderboard(leaderboard)
+        print_category_breakdown(category_stats)
 
-        again = input(color_text("\nPractice another code-write topic? (y/n): ", BOLD)).strip().lower()
+        again = input(color_text("\nRun another code-write session? (y/n): ", BOLD)).strip().lower()
         if again != "y":
             print(color_text("Returning to main menu.", BOLD, BLUE))
             return
@@ -3776,7 +4620,7 @@ def main_menu() -> None:
             [
                 f"  {color_text('1.', BOLD, CYAN)} Classic Mode  — 10 random interview scenarios",
                 f"  {color_text('2.', BOLD, CYAN)} Practice Mode — Choose a topic, drill 5 questions",
-                f"  {color_text('3.', BOLD, CYAN)} Code Write Mode — Type each answer (no multiple choice)",
+                f"  {color_text('3.', BOLD, CYAN)} Code Write Mode — Build full solutions with next-line coaching",
                 f"  {color_text('4.', BOLD, CYAN)} View Leaderboard",
                 f"  {color_text('5.', BOLD, RED)}  Quit",
             ],

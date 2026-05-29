@@ -1,0 +1,41 @@
+{
+  "name": "Shocka",
+  "level": "easy",
+  "language": "python",
+  "state": {
+    "score": 115,
+    "possible": 100,
+    "bonus": 15,
+    "streak": 10,
+    "hearts": 12,
+    "hints_used": 0
+  },
+  "category_stats": {
+    "Lists": {
+      "earned": 50,
+      "possible": 50
+    },
+    "Math": {
+      "earned": 50,
+      "possible": 50
+    },
+    "Conditionals": {
+      "earned": 0,
+      "possible": 0
+    }
+  },
+  "selected_indices": [
+    78,
+    136,
+    45,
+    57,
+    137,
+    59,
+    94,
+    99,
+    1,
+    184
+  ],
+  "scenario_position": 2,
+  "step_position": 0
+}
